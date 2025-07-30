@@ -13,7 +13,7 @@ class MyClient(discord.Client):
         # Make sure the bot is logging one server only
         if client.guilds.__len__() > 1:
             print(f"The bot have joined {client.guilds.__len__()} guilds. Multiple guilds logging is not supported")
-            client.close()
+            await client.close()
 
         # Save all members
         print("Saving all members...")
@@ -24,9 +24,11 @@ class MyClient(discord.Client):
                 "id": member.id,
                 "user_name": member.name,
                 "global_name": member.global_name,
-                # "avatar_url": member.avatar.url, # TODO: Fix this: AttributeError: 'NoneType' object has no attribute 'url'
-                # "banner_url": member.banner.url,
-                "created_at": str(member.created_at)
+                "avatar_url": str(member.avatar),
+                "banner_url": str(member.banner),
+                "created_at": str(member.created_at),
+                "joined_at": member.joined_at.isoformat(),
+                "roles": [role.id for role in member.roles]
             }
             all_members.append(member_obj)
         try:
@@ -52,6 +54,26 @@ class MyClient(discord.Client):
                 print("Channels data saved to data/channels.json successfully!")
         except Exception as e:
             print(f"Error saving channels data: {e}")
+            
+        # Save all roles in the Guild.
+        print("Save all roles in the Guild...")
+        all_roles = client.guilds[0].roles
+        roles_data = []
+        for role in all_roles:
+            roles_data.append({
+                "role_id": role.id,
+                "name": role.name,
+                "permissions": role.permissions.value,
+                "color": f"#{role.color.value:06x}",
+                "created_at": role.created_at.isoformat(),
+            })
+        
+        try:
+            with open('data/roles.json', 'w', encoding='utf-8') as f:
+                json.dump(roles_data, f, ensure_ascii=False, indent=4)
+                print("Roles data saved to data/roles.json successfully!")
+        except Exception as e:
+            print(f"Error saving roles data: {e}")
 
     async def on_message(self, message):
         print(f'Message from {message.author}: {message.content}')
