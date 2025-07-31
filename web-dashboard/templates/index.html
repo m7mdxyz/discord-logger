@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block head %}
+<title>Discord Bot Logs Dashboard - Home</title>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="text-center mb-10">
+        <h1 class="text-3xl font-bold text-white mb-4">Welcome to Discord Bot Logs Dashboard</h1>
+        <p class="text-discord-text text-lg">
+            Monitor and analyze your Discord server activity through comprehensive logs
+        </p>
+    </div>
+    
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+        <div class="bg-discord-light rounded-lg shadow-lg p-6">
+            <div class="flex items-center">
+                <div class="p-3 rounded-full bg-discord-accent bg-opacity-20 mr-4">
+                    <i class="fas fa-clipboard-list text-discord-accent text-xl"></i>
+                </div>
+                <div>
+                    <p class="text-discord-muted text-sm">Total Log Entries</p>
+                    <p class="text-2xl font-bold text-white">{{ stats.total_entries }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-discord-light rounded-lg shadow-lg p-6">
+            <div class="flex items-center">
+                <div class="p-3 rounded-full bg-discord-accent bg-opacity-20 mr-4">
+                    <i class="fas fa-clock text-discord-accent text-xl"></i>
+                </div>
+                <div>
+                    <p class="text-discord-muted text-sm">Last Logged Event</p>
+                    <p class="text-2xl font-bold text-white">{{ stats.last_logged_event }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Log Categories -->
+    <div class="bg-discord-light rounded-lg shadow-lg p-6 mb-10">
+        <h2 class="text-xl font-bold text-white mb-4">Log Categories</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <a href="{{ url_for('deleted_messages') }}" class="flex items-center p-4 bg-discord-darkest rounded-lg hover:bg-discord-accent hover:bg-opacity-20 transition-all duration-200">
+                <i class="fas fa-trash-alt text-discord-accent text-2xl mr-4"></i>
+                <div>
+                    <h3 class="font-semibold text-white">Deleted Messages</h3>
+                    <p class="text-discord-muted text-sm">View all deleted messages in your server</p>
+                </div>
+            </a>
+            
+            <a href="{{ url_for('edited_messages') }}" class="flex items-center p-4 bg-discord-darkest rounded-lg hover:bg-discord-accent hover:bg-opacity-20 transition-all duration-200">
+                <i class="fas fa-edit text-discord-accent text-2xl mr-4"></i>
+                <div>
+                    <h3 class="font-semibold text-white">Edited Messages</h3>
+                    <p class="text-discord-muted text-sm">Track message edits and content changes</p>
+                </div>
+            </a>
+            
+            <a href="{{ url_for('voice_activity') }}" class="flex items-center p-4 bg-discord-darkest rounded-lg hover:bg-discord-accent hover:bg-opacity-20 transition-all duration-200">
+                <i class="fas fa-microphone text-discord-accent text-2xl mr-4"></i>
+                <div>
+                    <h3 class="font-semibold text-white">Voice Activity</h3>
+                    <p class="text-discord-muted text-sm">Monitor voice channel joins, leaves, and moves</p>
+                </div>
+            </a>
+            
+            <a href="{{ url_for('member_activity') }}" class="flex items-center p-4 bg-discord-darkest rounded-lg hover:bg-discord-accent hover:bg-opacity-20 transition-all duration-200">
+                <i class="fas fa-users text-discord-accent text-2xl mr-4"></i>
+                <div>
+                    <h3 class="font-semibold text-white">Member Activity</h3>
+                    <p class="text-discord-muted text-sm">Track member joins, leaves, bans, and role changes</p>
+                </div>
+            </a>
+        </div>
+    </div>
+    
+    <!-- Information Section -->
+    <div class="bg-discord-light rounded-lg shadow-lg p-6">
+        <h2 class="text-xl font-bold text-white mb-4">About This Dashboard</h2>
+        <p class="text-discord-text mb-3">
+            This dashboard provides a comprehensive view of your Discord server's activity logs. 
+            It allows you to monitor message deletions, edits, voice channel activity, and member events 
+            in an organized and user-friendly interface.
+        </p>
+        <p class="text-discord-text">
+            Currently, the dashboard reads from JSON log files. In future versions, integration with a 
+            SQL database will be implemented for improved performance and querying capabilities.
+        </p>
+    </div>
+</div>
+{% endblock %}
