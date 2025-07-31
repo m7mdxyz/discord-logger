@@ -488,8 +488,17 @@ class MyClient(discord.Client):
             member_id=member.id,
             timestamp=current_time_utc
         )
+        member_instance = Member(
+            id= member.id,
+            name= member.name,
+            global_name=member.global_name,
+            avatar_url=str(member.avatar),
+            roles_json=json.dumps([role.id for role in member.roles]),
+            created_at=member.created_at
+        )
         
         with Session(engine) as session:
+            session.add(member_instance)
             session.add(guild_activity_instance)
             session.commit()
 
