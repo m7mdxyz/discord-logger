@@ -912,7 +912,7 @@ token = os.getenv("BOT_TOKEN")
 
 # ==== Start of main logic ====
 
-engine = create_engine("sqlite:///database/orm.db")
+engine = create_engine("sqlite:///discord-bot/database/orm.db")
 SQLModel.metadata.create_all(engine)
 
 
