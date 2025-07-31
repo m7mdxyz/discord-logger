@@ -4,11 +4,17 @@ from dotenv import load_dotenv
 import os
 import json
 from datetime import datetime, timezone
+
+from sqlmodel import SQLModel, Field, create_engine, Session, Relationship, select
+from typing import Optional, List
+from sqlalchemy import JSON as SQLAlchemyJSON
 # ==== End of imports ====
 
 # ==== Start of bot's logic ====
 class MyClient(discord.Client):
     async def on_ready(self):
+        
+        # Setting things up
         print(f'Logged on as {self.user}!')
         print(f'Bot ID: {self.user.id}')
         activity = discord.Activity(type=discord.ActivityType.listening, name="Logging..")
@@ -25,70 +31,83 @@ class MyClient(discord.Client):
         # Save all members
         print("Saving all members...")
         all_members_gen = client.get_all_members()
-        all_members = []
-        for member in all_members_gen:
-            member_obj = {
-                "id": member.id,
-                "user_name": member.name,
-                "global_name": member.global_name,
-                "avatar_url": str(member.avatar),
-                "banner_url": str(member.banner),
-                "created_at": str(member.created_at),
-                "joined_at": member.joined_at.isoformat(),
-                "roles": [role.id for role in member.roles]
-            }
-            all_members.append(member_obj)
-        try:
-            with open('data/members_data.json', 'w', encoding='utf-8') as f:
-                json.dump(all_members, f, ensure_ascii=False, indent=4)
-                print("Members data saved to data/members_data.json successfully!")
-        except Exception as e:
-            print(f"Error saving members data: {e}")
-        
+        with Session(engine) as session:
+            for member in all_members_gen:
+                member_instance = Member(
+                    id= member.id,
+                    name= member.name,
+                    global_name=member.global_name,
+                    avatar_url=str(member.avatar),
+                    roles_json=json.dumps([role.id for role in member.roles]),
+                    created_at=member.created_at
+                )
+                
+                
+                existing = session.get(Member, member_instance.id)
+                if existing:
+                    continue
+                
+                session.add(member_instance)
+                session.commit()
+        print("Saved all members")
         
         # Save all channels
         print("Saving all channels...")
         all_channels_gen = client.get_all_channels()
-        all_channels = []
-        for channel in all_channels_gen:
-            channel_obj = {
-                "id": channel.id,
-                "name": channel.name,
-                "type": str(channel.type),
-            }
-            all_channels.append(channel_obj)
-        try:
-            with open('data/channels_data.json', 'w', encoding='utf-8') as f:
-                json.dump(all_channels, f, ensure_ascii=False, indent=4)
-                print("Channels data saved to data/channels_data.json successfully!")
-        except Exception as e:
-            print(f"Error saving channels data: {e}")
-            
+        with Session(engine) as session:
+            for channel in all_channels_gen:
+                channel_instance = Channel(
+                    id=channel.id,
+                    name=channel.name,
+                    ch_type=str(channel.type)
+                )
+                
+                existing = session.get(Channel, channel_instance.id)
+                if existing:
+                    continue
+    
+                session.add(channel_instance)
+                session.commit()
+        print("Saved all channels")                   
             
         # Save all roles in the Guild.
         print("Save all roles in the Guild...")
         all_roles = client.guilds[0].roles
-        roles_data = []
-        for role in all_roles:
-            roles_data.append({
-                "role_id": role.id,
-                "name": role.name,
-                "permissions": role.permissions.value,
-                "color": f"#{role.color.value:06x}",
-                "created_at": role.created_at.isoformat(),
-            })
         
-        try:
-            with open('data/roles_data.json', 'w', encoding='utf-8') as f:
-                json.dump(roles_data, f, ensure_ascii=False, indent=4)
-                print("Roles data saved to data/roles_data.json successfully!")
-        except Exception as e:
-            print(f"Error saving roles data: {e}")
+        with Session(engine) as session:
+            for role in all_roles:
+                role_instance = Role(
+                    id=role.id,
+                    name=role.name,
+                    color=f"#{role.color.value:06x}",
+                    permissions=role.permissions.value,
+                    created_at=role.created_at,
+                )
+                
+                existing = session.get(Channel, role_instance.id)
+                if existing:
+                    continue
+    
+                session.add(role_instance)
+                session.commit()
 
-
-    async def on_message(self, message):
-        print(f'Message from {message.author}: {message.content}')
-        # TODO: Store the message
+    async def on_message(self, message: discord.Message):
+        
+        if message.author == self.user:
+            return
+        if message.guild is None:
+            return
+        
+        message_instance = Message(
+            id=message.id,
+            member_id=message.author.id,
+            channel_id=message.channel.id,
+            content=message.clean_content,
+            created_at=message.created_at
+        )
+        with Session(engine) as session:
+            session.add(message_instance)
+            session.commit()
         
     # Logging deleted messages
     async def on_message_delete(self, message):
@@ -739,6 +758,44 @@ class MyClient(discord.Client):
 
 # ==== End of bot's logic ====
 
+# ==== Start of SQL Schema ====
+class Message(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    member_id: Optional[int] = Field(foreign_key="member.id")
+    channel_id: Optional[int] = Field(foreign_key="channel.id")
+    content: Optional[str] = Field(max_length=256)
+    created_at: Optional[datetime]
+    
+    member: "Member" = Relationship(back_populates="messages")
+    channel: "Channel" = Relationship(back_populates="messages")
+
+class Member(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: Optional[str] = Field(max_length=256)
+    global_name: Optional[str] = Field(max_length=256)
+    avatar_url: Optional[str] = Field(max_length=256)
+    created_at: Optional[datetime]
+    roles_json: Optional[str] = Field()
+    
+    messages: List[Message] = Relationship(back_populates="member")
+
+class Channel(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: Optional[str] = Field(max_length=256)
+    ch_type: Optional[str] = Field(max_length=256)
+    
+    messages: List[Message] = Relationship(back_populates="channel")
+    
+class Role(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: Optional[str] = Field(max_length=256)
+    color: Optional[str] = Field(max_length=256)
+    permissions: Optional[int] = Field()
+    created_at: Optional[datetime]
+
+
+# ==== End of SQL Schema ====
+
 # ==== Start of Intents, permissions, and tokens ====
 intents = discord.Intents.all()
 
@@ -748,6 +805,13 @@ token = os.getenv("BOT_TOKEN")
 # ==== End of Intents, permissions, and tokens ====
 
 # ==== Start of main logic ====
+
+engine = create_engine("sqlite:///database/orm.db")
+SQLModel.metadata.create_all(engine)
+
+
+
 client.run(token)
+
 
 # ==== End of main logic ====
