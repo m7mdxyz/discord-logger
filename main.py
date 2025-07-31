@@ -146,43 +146,6 @@ class MyClient(discord.Client):
             return
 
 
-        # Prepare data for JSON logging
-        # deleted_message_data = {
-        #     "message_id": message.id,
-        #     "guild_id": message.guild.id,
-        #     "guild_name": message.guild.name,
-        #     "channel_id": message.channel.id,
-        #     "channel_name": message.channel.name,
-        #     "author_id": message.author.id,
-        #     "author_name": str(message.author), # Use str(message.author) for "Name#Discriminator" or just "Name"
-        #     "author_display_name": message.author.display_name,
-        #     "message_content": message.content,
-        #     "sent_at_utc": message.created_at.strftime('%Y-%m-%d %H:%M:%S UTC'),
-        #     "deleted_at_utc": deleted_at.strftime('%Y-%m-%d %H:%M:%S UTC')
-        # }
-
-        # # Define the filename for deleted message logs
-        # deleted_messages_filename = "data/deleted_messages_log.json"
-
-        # # Load existing data or create an empty list
-        # try:
-        #     with open(deleted_messages_filename, 'r', encoding='utf-8') as f:
-        #         log_entries = json.load(f)
-        # except (FileNotFoundError, json.JSONDecodeError):
-        #     log_entries = [] # File doesn't exist or is empty/corrupted, start with an empty list
-
-        # # Append the new deleted message data
-        # log_entries.append(deleted_message_data)
-
-        # # Save the updated data back to the JSON file
-        # try:
-        #     with open(deleted_messages_filename, 'w', encoding='utf-8') as f:
-        #         json.dump(log_entries, f, ensure_ascii=False, indent=4)
-        #     print(f"Successfully logged deleted message to {deleted_messages_filename}")
-        # except IOError as e:
-        #     print(f"Error saving deleted message log to file: {e}")
-
-
         # Create an embed for a cleaner look (for Discord channel logging)
         embed = discord.Embed(
             title="Message Deleted",
@@ -243,44 +206,6 @@ class MyClient(discord.Client):
         if not log_channel:
             print(f"Log channel with ID {self.log_channel_id} not found for edited messages.")
             return
-
-        # # Prepare data for JSON logging
-        # edited_message_data = {
-        #     "message_id": after.id,
-        #     "guild_id": after.guild.id,
-        #     "guild_name": after.guild.name,
-        #     "channel_id": after.channel.id,
-        #     "channel_name": after.channel.name,
-        #     "author_id": after.author.id,
-        #     "author_name": str(after.author),
-        #     "author_display_name": after.author.display_name,
-        #     "content_before": before.content,
-        #     "content_after": after.content,
-        #     "sent_at_utc": after.created_at.strftime('%Y-%m-%d %H:%M:%S UTC'),
-        #     "edited_at_utc": edited_at.strftime('%Y-%m-%d %H:%M:%S UTC'),
-        #     "jump_url": after.jump_url
-        # }
-
-        # # Define the filename for edited message logs
-        # edited_messages_filename = "data/edited_messages_log.json"
-
-        # # Load existing data or create an empty list
-        # try:
-        #     with open(edited_messages_filename, 'r', encoding='utf-8') as f:
-        #         log_entries = json.load(f)
-        # except (FileNotFoundError, json.JSONDecodeError):
-        #     log_entries = []
-
-        # # Append the new edited message data
-        # log_entries.append(edited_message_data)
-
-        # # Save the updated data back to the JSON file
-        # try:
-        #     with open(edited_messages_filename, 'w', encoding='utf-8') as f:
-        #         json.dump(log_entries, f, ensure_ascii=False, indent=4)
-        #     print(f"Successfully logged edited message to {edited_messages_filename}")
-        # except IOError as e:
-        #     print(f"Error saving edited message log to file: {e}")
 
 
         # Create an embed for Discord channel logging
@@ -447,23 +372,6 @@ class MyClient(discord.Client):
 
         # If an embed was created, send it to Discord and log to JSON
         if embed:
-            # Save to JSON file
-            # voice_log_filename = "data/voice_channel_log.json"
-            # try:
-            #     with open(voice_log_filename, 'r', encoding='utf-8') as f:
-            #         log_entries = json.load(f)
-            # except (FileNotFoundError, json.JSONDecodeError):
-            #     log_entries = []
-
-            # log_entries.append(log_data)
-
-            # try:
-            #     with open(voice_log_filename, 'w', encoding='utf-8') as f:
-            #         json.dump(log_entries, f, ensure_ascii=False, indent=4)
-            #     print(f"Successfully logged {log_type} event to {voice_log_filename}")
-            # except IOError as e:
-            #     print(f"Error saving {log_type} log to file: {e}")
-
             # Send to Discord channel
             try:
                 await log_channel.send(embed=embed)
@@ -529,19 +437,6 @@ class MyClient(discord.Client):
         embed.add_field(name="Account Age", value=f"{account_age.days // 365} years, {(account_age.days % 365) // 30} months, {account_age.days % 30} days", inline=False)
         embed.set_footer(text=f"ID: {member.id} • Joined at: {current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC')}")
 
-        # JSON Logging
-        # log_data = {
-        #     "event_type": "member_join",
-        #     "timestamp_utc": current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC'),
-        #     "user_id": member.id,
-        #     "user_name": str(member),
-        #     "guild_id": member.guild.id,
-        #     "guild_name": member.guild.name,
-        #     "account_created_at_utc": member.created_at.strftime('%Y-%m-%d %H:%M:%S UTC'),
-        #     "account_age_days": account_age.days
-        # }
-        # self._save_log_to_json("data/members_log.json", log_data) # Helper function to save JSON
-
         try:
             await log_channel.send(embed=embed)
             print(f"Logged member join: {member} in {member.guild.name}")
@@ -588,16 +483,6 @@ class MyClient(discord.Client):
         embed.set_thumbnail(url=member.avatar)
         embed.set_footer(text=f"ID: {member.id} • Left at: {current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC')}")
 
-        # JSON Logging
-        # log_data = {
-        #     "event_type": "member_leave",
-        #     "timestamp_utc": current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC'),
-        #     "user_id": member.id,
-        #     "user_name": str(member),
-        #     "guild_id": member.guild.id,
-        #     "guild_name": member.guild.name
-        # }
-        # self._save_log_to_json("data/members_log.json", log_data)
 
         try:
             await log_channel.send(embed=embed)
@@ -685,17 +570,6 @@ class MyClient(discord.Client):
                     embed.set_author(name=f"{after.display_name} ({after})", icon_url=after.avatar.url if after.avatar else discord.Embed.Empty)
                     embed.set_footer(text=f"ID: {after.id} • {current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC')}")
 
-                    # log_data = {
-                    #     "event_type": "role_added",
-                    #     "timestamp_utc": current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC'),
-                    #     "user_id": after.id,
-                    #     "user_name": str(after),
-                    #     "guild_id": after.guild.id,
-                    #     "guild_name": after.guild.name,
-                    #     "role_id": role.id,
-                    #     "role_name": role.name
-                    # }
-                    # self._save_log_to_json("data/members_log.json", log_data)
 
                     try:
                         await log_channel.send(embed=embed)
@@ -715,17 +589,6 @@ class MyClient(discord.Client):
                     embed.set_author(name=f"{after.display_name} ({after})", icon_url=after.avatar.url if after.avatar else discord.Embed.Empty)
                     embed.set_footer(text=f"ID: {after.id} • {current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC')}")
 
-                    # log_data = {
-                    #     "event_type": "role_removed",
-                    #     "timestamp_utc": current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC'),
-                    #     "user_id": after.id,
-                    #     "user_name": str(after),
-                    #     "guild_id": after.guild.id,
-                    #     "guild_name": after.guild.name,
-                    #     "role_id": role.id,
-                    #     "role_name": role.name
-                    # }
-                    # self._save_log_to_json("data/members_log.json", log_data)
 
                     try:
                         await log_channel.send(embed=embed)
@@ -832,17 +695,6 @@ class MyClient(discord.Client):
         embed.set_author(name=f"{user.display_name} ({user})", icon_url=user.avatar)
         embed.set_footer(text=f"ID: {user.id} • Banned at: {current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC')}")
 
-        # # JSON Logging
-        # log_data = {
-        #     "event_type": "member_banned",
-        #     "timestamp_utc": current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC'),
-        #     "user_id": user.id,
-        #     "user_name": str(user),
-        #     "guild_id": guild.id,
-        #     "guild_name": guild.name
-        # }
-        # self._save_log_to_json("data/members_log.json", log_data)
-
         try:
             await log_channel.send(embed=embed)
             print(f"Logged member ban: {user} in {guild.name}")
@@ -880,17 +732,6 @@ class MyClient(discord.Client):
         )
         embed.set_author(name=f"{user.display_name} ({user})", icon_url=user.avatar)
         embed.set_footer(text=f"ID: {user.id} • Unbanned at: {current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC')}")
-
-        # JSON Logging
-        # log_data = {
-        #     "event_type": "member_unbanned",
-        #     "timestamp_utc": current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC'),
-        #     "user_id": user.id,
-        #     "user_name": str(user),
-        #     "guild_id": guild.id,
-        #     "guild_name": guild.name
-        # }
-        # self._save_log_to_json("data/members_log.json", log_data)
 
         try:
             await log_channel.send(embed=embed)
