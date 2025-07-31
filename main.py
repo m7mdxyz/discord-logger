@@ -126,13 +126,13 @@ class MyClient(discord.Client):
         deleted_at = datetime.utcnow()
                 
         deleted_message_instance = DeletedMessage(
-            message_id=message.id,
-            content=message.clean_content,
-            deleted_at=deleted_at
+        message_id=message.id,
+        deleted_at=deleted_at
         )
         with Session(engine) as session:
             session.add(deleted_message_instance)
             session.commit()
+
 
 
         # Find the log channel
@@ -195,10 +195,20 @@ class MyClient(discord.Client):
             content_after=after.clean_content,
             edited_at=edited_at
         )
-        
+
+        # Update the message content and is_edited flag in Message table
         with Session(engine) as session:
+            statement = select(Message).where(Message.id == after.id)
+            message_to_update = session.exec(statement).first()
+            if message_to_update:
+                message_to_update.content = after.clean_content
+                message_to_update.is_edited = True
+                session.add(message_to_update)
+            
             session.add(edited_message_instance)
             session.commit()
+
+
 
         # Get the log channel
         # log_channel = self.get_channel(self.log_channel_id) # Use your defined log channel ID
@@ -505,7 +515,7 @@ class MyClient(discord.Client):
             print(f"Log channel with ID {self.log_channel_id} not found for member updates.")
             return
 
-        current_time_utc = datetime.utcnow()
+        current_time_utc = datetime.now(timezone.utc)
 
         action = ""
         if before.roles != after.roles:
@@ -756,6 +766,65 @@ class MyClient(discord.Client):
                 json.dump(log_entries, f, ensure_ascii=False, indent=4)
         except IOError as e:
             print(f"Error saving log to {filename}: {e}")
+    
+    # Logging role creation
+    async def on_guild_role_create(self, role: discord.Role):
+        """
+        Logs when a new role is created in the guild.
+        """
+        role_instance = Role(
+            id=role.id,
+            name=role.name,
+            color=f"#{role.color.value:06x}",
+            permissions=role.permissions.value,
+            created_at=role.created_at,
+        )
+        
+        with Session(engine) as session:
+            session.add(role_instance)
+            session.commit()
+        
+        print(f"New role created and logged: {role.name} (ID: {role.id})")
+    
+    # Logging role deletion (keeping record in database)
+    async def on_guild_role_delete(self, role: discord.Role):
+        """
+        Logs when a role is deleted from the guild.
+        Note: We don't delete the role from database to maintain historical data.
+        """
+        print(f"Role deleted from server but kept in database: {role.name} (ID: {role.id})")
+        # The role record remains in the database for historical purposes
+        
+    # Logging role updates
+    async def on_guild_role_update(self, before: discord.Role, after: discord.Role):
+        """
+        Logs when a role is updated (name, color, permissions, etc.)
+        """
+        # Check if any relevant attributes changed
+        if (before.name != after.name or 
+            before.color != after.color or 
+            before.permissions != after.permissions):
+            
+            # Update role in database
+            with Session(engine) as session:
+                statement = select(Role).where(Role.id == after.id)
+                role_to_update = session.exec(statement).first()
+                if role_to_update:
+                    if before.name != after.name:
+                        role_to_update.name = after.name
+                        print(f"Role name updated: {before.name} -> {after.name} (ID: {after.id})")
+                    
+                    if before.color != after.color:
+                        role_to_update.color = f"#{after.color.value:06x}"
+                        print(f"Role color updated: {before.color} -> {after.color} (ID: {after.id})")
+                    
+                    if before.permissions != after.permissions:
+                        role_to_update.permissions = after.permissions.value
+                        print(f"Role permissions updated for role: {after.name} (ID: {after.id})")
+                    
+                    session.add(role_to_update)
+                    session.commit()
+
 
 # ==== End of bot's logic ====
 
@@ -766,9 +835,11 @@ class Message(SQLModel, table=True):
     channel_id: Optional[int] = Field(foreign_key="channel.id")
     content: Optional[str] = Field(max_length=2000)
     created_at: Optional[datetime]
+    is_edited: Optional[bool] = Field(default=False)
     
     member: "Member" = Relationship(back_populates="messages")
     channel: "Channel" = Relationship(back_populates="messages")
+
 
 class Member(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -797,8 +868,8 @@ class Role(SQLModel, table=True):
 class DeletedMessage(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     message_id: Optional[int] = Field(default=None) # Use this to find user_id, content, and all dat shit
-    content: Optional[str] = Field(max_length=256)
     deleted_at: Optional[datetime]
+
     
 class EditedMessage(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
