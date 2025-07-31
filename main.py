@@ -481,7 +481,7 @@ class MyClient(discord.Client):
         if member.bot:
             return
         
-        current_time_utc = datetime.utcnow()
+        current_time_utc = datetime.now(timezone.utc)
         
         guild_activity_instance = GuildActivity(
             action="Join",
@@ -497,8 +497,11 @@ class MyClient(discord.Client):
             created_at=member.created_at
         )
         
+        
         with Session(engine) as session:
-            session.add(member_instance)
+            existing = session.get(Member, member_instance.id)
+            if not existing:
+                session.add(member_instance)
             session.add(guild_activity_instance)
             session.commit()
 
@@ -539,13 +542,13 @@ class MyClient(discord.Client):
         # }
         # self._save_log_to_json("data/members_log.json", log_data) # Helper function to save JSON
 
-        # try:
-        #     await log_channel.send(embed=embed)
-        #     print(f"Logged member join: {member} in {member.guild.name}")
-        # except discord.Forbidden:
-        #     print(f"Bot does not have permissions to send messages in log channel {log_channel.name}")
-        # except discord.HTTPException as e:
-        #     print(f"Failed to send member join log: {e}")
+        try:
+            await log_channel.send(embed=embed)
+            print(f"Logged member join: {member} in {member.guild.name}")
+        except discord.Forbidden:
+            print(f"Bot does not have permissions to send messages in log channel {log_channel.name}")
+        except discord.HTTPException as e:
+            print(f"Failed to send member join log: {e}")
     
     # Logging leaving the guild
     async def on_member_remove(self, member: discord.Member):
@@ -596,13 +599,13 @@ class MyClient(discord.Client):
         # }
         # self._save_log_to_json("data/members_log.json", log_data)
 
-        # try:
-        #     await log_channel.send(embed=embed)
-        #     print(f"Logged member leave: {member} from {member.guild.name}")
-        # except discord.Forbidden:
-        #     print(f"Bot does not have permissions to send messages in log channel {log_channel.name}")
-        # except discord.HTTPException as e:
-        #     print(f"Failed to send member leave log: {e}")
+        try:
+            await log_channel.send(embed=embed)
+            print(f"Logged member leave: {member} from {member.guild.name}")
+        except discord.Forbidden:
+            print(f"Bot does not have permissions to send messages in log channel {log_channel.name}")
+        except discord.HTTPException as e:
+            print(f"Failed to send member leave log: {e}")
 
     # Logging member update
     async def on_member_update(self, before: discord.Member, after: discord.Member):
@@ -840,13 +843,13 @@ class MyClient(discord.Client):
         # }
         # self._save_log_to_json("data/members_log.json", log_data)
 
-        # try:
-        #     await log_channel.send(embed=embed)
-        #     print(f"Logged member ban: {user} in {guild.name}")
-        # except discord.Forbidden:
-        #     print(f"Bot does not have permissions to send messages in log channel {log_channel.name}")
-        # except discord.HTTPException as e:
-        #     print(f"Failed to send member ban log: {e}")
+        try:
+            await log_channel.send(embed=embed)
+            print(f"Logged member ban: {user} in {guild.name}")
+        except discord.Forbidden:
+            print(f"Bot does not have permissions to send messages in log channel {log_channel.name}")
+        except discord.HTTPException as e:
+            print(f"Failed to send member ban log: {e}")
 
     # Logging member unban
     async def on_member_unban(self, guild, user: discord.User):
@@ -889,13 +892,13 @@ class MyClient(discord.Client):
         # }
         # self._save_log_to_json("data/members_log.json", log_data)
 
-        # try:
-        #     await log_channel.send(embed=embed)
-        #     print(f"Logged member unban: {user} in {guild.name}")
-        # except discord.Forbidden:
-        #     print(f"Bot does not have permissions to send messages in log channel {log_channel.name}")
-        # except discord.HTTPException as e:
-        #     print(f"Failed to send member unban log: {e}")
+        try:
+            await log_channel.send(embed=embed)
+            print(f"Logged member unban: {user} in {guild.name}")
+        except discord.Forbidden:
+            print(f"Bot does not have permissions to send messages in log channel {log_channel.name}")
+        except discord.HTTPException as e:
+            print(f"Failed to send member unban log: {e}")
 
     # Helper function to save logs to JSON (add this to your MyClient class)
     def _save_log_to_json(self, filename, new_entry):
