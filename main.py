@@ -596,7 +596,7 @@ class MyClient(discord.Client):
         #     print(f"Failed to send member leave log: {e}")
 
     # Logging member update
-    async def on_member_update(self, before, after):
+    async def on_member_update(self, before: discord.Member, after: discord.Member):
         """
         Logs when a member's roles are changed or when they are timed out.
         """
@@ -608,7 +608,55 @@ class MyClient(discord.Client):
             print(f"Log channel with ID {self.log_channel_id} not found for member updates.")
             return
 
-        current_time_utc = datetime.now(timezone.utc) # Ensure this is timezone-aware UTC
+        current_time_utc = datetime.utcnow()
+
+        action = ""
+        if before.roles != after.roles:
+            role_id = None
+            added_roles = [role for role in after.roles if role not in before.roles]
+            removed_roles = [role for role in before.roles if role not in after.roles]
+            if added_roles:
+                action = "Role Added"
+                role_id = added_roles[0].id
+
+                # Update the member roles in Member table                
+                with Session(engine) as session:
+                    statement = select(Member).where(Member.id == after.id)
+                    member_to_update = session.exec(statement).one()
+                    current_roles = json.loads(member_to_update.roles_json or "[]")
+                    if role_id not in current_roles:
+                        current_roles.append(role_id)
+                    member_to_update.roles_json = json.dumps(current_roles)
+                    session.add(member_to_update)
+                    session.commit()
+                                    
+            elif removed_roles:
+                action = "Role Removed"
+                role_id = removed_roles[0].id
+                
+                # Update the member roles in Member table                
+                with Session(engine) as session:
+                    statement = select(Member).where(Member.id == after.id)
+                    member_to_update = session.exec(statement).one()
+                    current_roles = json.loads(member_to_update.roles_json or "[]")
+                    if role_id in current_roles:
+                        current_roles.remove(role_id)
+                    member_to_update.roles_json = json.dumps(current_roles)
+                    session.add(member_to_update)
+                    session.commit()
+
+            member_activity_instance = MemberActivity(
+                member_id=after.id,
+                action=action,
+                role_id=role_id,
+                timestamp=current_time_utc,
+            )
+            with Session(engine) as session:
+                session.add(member_activity_instance)
+                session.commit()
+                
+        # TODO: Timeout logging into database
+
 
         # --- Role Changes Logging (Existing) ---
         if before.roles != after.roles:
@@ -625,17 +673,17 @@ class MyClient(discord.Client):
                     embed.set_author(name=f"{after.display_name} ({after})", icon_url=after.avatar.url if after.avatar else discord.Embed.Empty)
                     embed.set_footer(text=f"ID: {after.id} • {current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC')}")
 
-                    log_data = {
-                        "event_type": "role_added",
-                        "timestamp_utc": current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC'),
-                        "user_id": after.id,
-                        "user_name": str(after),
-                        "guild_id": after.guild.id,
-                        "guild_name": after.guild.name,
-                        "role_id": role.id,
-                        "role_name": role.name
-                    }
-                    self._save_log_to_json("data/members_log.json", log_data)
+                    # log_data = {
+                    #     "event_type": "role_added",
+                    #     "timestamp_utc": current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC'),
+                    #     "user_id": after.id,
+                    #     "user_name": str(after),
+                    #     "guild_id": after.guild.id,
+                    #     "guild_name": after.guild.name,
+                    #     "role_id": role.id,
+                    #     "role_name": role.name
+                    # }
+                    # self._save_log_to_json("data/members_log.json", log_data)
 
                     try:
                         await log_channel.send(embed=embed)
@@ -655,17 +703,17 @@ class MyClient(discord.Client):
                     embed.set_author(name=f"{after.display_name} ({after})", icon_url=after.avatar.url if after.avatar else discord.Embed.Empty)
                     embed.set_footer(text=f"ID: {after.id} • {current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC')}")
 
-                    log_data = {
-                        "event_type": "role_removed",
-                        "timestamp_utc": current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC'),
-                        "user_id": after.id,
-                        "user_name": str(after),
-                        "guild_id": after.guild.id,
-                        "guild_name": after.guild.name,
-                        "role_id": role.id,
-                        "role_name": role.name
-                    }
-                    self._save_log_to_json("data/members_log.json", log_data)
+                    # log_data = {
+                    #     "event_type": "role_removed",
+                    #     "timestamp_utc": current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC'),
+                    #     "user_id": after.id,
+                    #     "user_name": str(after),
+                    #     "guild_id": after.guild.id,
+                    #     "guild_name": after.guild.name,
+                    #     "role_id": role.id,
+                    #     "role_name": role.name
+                    # }
+                    # self._save_log_to_json("data/members_log.json", log_data)
 
                     try:
                         await log_channel.send(embed=embed)
@@ -919,6 +967,14 @@ class GuildActivity(SQLModel, table=True):
     action: Optional[str] = Field(max_length=256)
     member_id: Optional[int] = Field()
     timestamp: Optional[datetime]
+    
+class MemberActivity(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    action: Optional[str] = Field(max_length=256)
+    member_id: Optional[int] = Field()
+    role_id: Optional[int] = Field()
+    timestamp: Optional[datetime]
+
 
 # ==== End of SQL Schema ====
 
