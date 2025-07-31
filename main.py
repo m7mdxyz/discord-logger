@@ -84,7 +84,7 @@ class MyClient(discord.Client):
                     created_at=role.created_at,
                 )
                 
-                existing = session.get(Channel, role_instance.id)
+                existing = session.get(Role, role_instance.id)
                 if existing:
                     continue
     
@@ -110,7 +110,7 @@ class MyClient(discord.Client):
             session.commit()
         
     # Logging deleted messages
-    async def on_message_delete(self, message):
+    async def on_message_delete(self, message: discord.Message):
         """
         This event is called when a message is deleted.
         """
@@ -121,6 +121,19 @@ class MyClient(discord.Client):
         # Ignore DMs, as messages can only be deleted in guilds for this purpose
         if message.guild is None:
             return
+        
+        # Get the current time when the message was deleted
+        deleted_at = datetime.utcnow()
+                
+        deleted_message_instance = DeletedMessage(
+            message_id=message.id,
+            content=message.clean_content,
+            deleted_at=deleted_at
+        )
+        with Session(engine) as session:
+            session.add(deleted_message_instance)
+            session.commit()
+
 
         # Find the log channel
         # log_channel = self.get_channel(self.log_channel_id)
@@ -132,44 +145,42 @@ class MyClient(discord.Client):
             print(f"Log channel with ID {log_channel} not found.")
             return
 
-        # Get the current time when the message was deleted
-        deleted_at = datetime.utcnow()
 
         # Prepare data for JSON logging
-        deleted_message_data = {
-            "message_id": message.id,
-            "guild_id": message.guild.id,
-            "guild_name": message.guild.name,
-            "channel_id": message.channel.id,
-            "channel_name": message.channel.name,
-            "author_id": message.author.id,
-            "author_name": str(message.author), # Use str(message.author) for "Name#Discriminator" or just "Name"
-            "author_display_name": message.author.display_name,
-            "message_content": message.content,
-            "sent_at_utc": message.created_at.strftime('%Y-%m-%d %H:%M:%S UTC'),
-            "deleted_at_utc": deleted_at.strftime('%Y-%m-%d %H:%M:%S UTC')
-        }
+        # deleted_message_data = {
+        #     "message_id": message.id,
+        #     "guild_id": message.guild.id,
+        #     "guild_name": message.guild.name,
+        #     "channel_id": message.channel.id,
+        #     "channel_name": message.channel.name,
+        #     "author_id": message.author.id,
+        #     "author_name": str(message.author), # Use str(message.author) for "Name#Discriminator" or just "Name"
+        #     "author_display_name": message.author.display_name,
+        #     "message_content": message.content,
+        #     "sent_at_utc": message.created_at.strftime('%Y-%m-%d %H:%M:%S UTC'),
+        #     "deleted_at_utc": deleted_at.strftime('%Y-%m-%d %H:%M:%S UTC')
+        # }
 
-        # Define the filename for deleted message logs
-        deleted_messages_filename = "data/deleted_messages_log.json"
+        # # Define the filename for deleted message logs
+        # deleted_messages_filename = "data/deleted_messages_log.json"
 
-        # Load existing data or create an empty list
-        try:
-            with open(deleted_messages_filename, 'r', encoding='utf-8') as f:
-                log_entries = json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            log_entries = [] # File doesn't exist or is empty/corrupted, start with an empty list
+        # # Load existing data or create an empty list
+        # try:
+        #     with open(deleted_messages_filename, 'r', encoding='utf-8') as f:
+        #         log_entries = json.load(f)
+        # except (FileNotFoundError, json.JSONDecodeError):
+        #     log_entries = [] # File doesn't exist or is empty/corrupted, start with an empty list
 
-        # Append the new deleted message data
-        log_entries.append(deleted_message_data)
+        # # Append the new deleted message data
+        # log_entries.append(deleted_message_data)
 
-        # Save the updated data back to the JSON file
-        try:
-            with open(deleted_messages_filename, 'w', encoding='utf-8') as f:
-                json.dump(log_entries, f, ensure_ascii=False, indent=4)
-            print(f"Successfully logged deleted message to {deleted_messages_filename}")
-        except IOError as e:
-            print(f"Error saving deleted message log to file: {e}")
+        # # Save the updated data back to the JSON file
+        # try:
+        #     with open(deleted_messages_filename, 'w', encoding='utf-8') as f:
+        #         json.dump(log_entries, f, ensure_ascii=False, indent=4)
+        #     print(f"Successfully logged deleted message to {deleted_messages_filename}")
+        # except IOError as e:
+        #     print(f"Error saving deleted message log to file: {e}")
 
 
         # Create an embed for a cleaner look (for Discord channel logging)
@@ -196,7 +207,7 @@ class MyClient(discord.Client):
     
     
     # Logging edited messages
-    async def on_message_edit(self, before, after):
+    async def on_message_edit(self, before: discord.Message, after: discord.Message):
         """
         This event is called when a message is edited.
         """
@@ -211,6 +222,20 @@ class MyClient(discord.Client):
         # Ignore if the content hasn't actually changed (e.g., embed added/removed, pinned state changed)
         if before.content == after.content:
             return
+        
+        # Get the current time when the message was edited
+        edited_at = datetime.utcnow()
+
+        edited_message_instance = EditedMessage(
+            message_id=after.id,
+            content_before=before.clean_content,
+            content_after=after.clean_content,
+            edited_at=edited_at
+        )
+        
+        with Session(engine) as session:
+            session.add(edited_message_instance)
+            session.commit()
 
         # Get the log channel
         # log_channel = self.get_channel(self.log_channel_id) # Use your defined log channel ID
@@ -219,46 +244,43 @@ class MyClient(discord.Client):
             print(f"Log channel with ID {self.log_channel_id} not found for edited messages.")
             return
 
-        # Get the current time when the message was edited
-        edited_at = datetime.utcnow()
+        # # Prepare data for JSON logging
+        # edited_message_data = {
+        #     "message_id": after.id,
+        #     "guild_id": after.guild.id,
+        #     "guild_name": after.guild.name,
+        #     "channel_id": after.channel.id,
+        #     "channel_name": after.channel.name,
+        #     "author_id": after.author.id,
+        #     "author_name": str(after.author),
+        #     "author_display_name": after.author.display_name,
+        #     "content_before": before.content,
+        #     "content_after": after.content,
+        #     "sent_at_utc": after.created_at.strftime('%Y-%m-%d %H:%M:%S UTC'),
+        #     "edited_at_utc": edited_at.strftime('%Y-%m-%d %H:%M:%S UTC'),
+        #     "jump_url": after.jump_url
+        # }
 
-        # Prepare data for JSON logging
-        edited_message_data = {
-            "message_id": after.id,
-            "guild_id": after.guild.id,
-            "guild_name": after.guild.name,
-            "channel_id": after.channel.id,
-            "channel_name": after.channel.name,
-            "author_id": after.author.id,
-            "author_name": str(after.author),
-            "author_display_name": after.author.display_name,
-            "content_before": before.content,
-            "content_after": after.content,
-            "sent_at_utc": after.created_at.strftime('%Y-%m-%d %H:%M:%S UTC'),
-            "edited_at_utc": edited_at.strftime('%Y-%m-%d %H:%M:%S UTC'),
-            "jump_url": after.jump_url
-        }
+        # # Define the filename for edited message logs
+        # edited_messages_filename = "data/edited_messages_log.json"
 
-        # Define the filename for edited message logs
-        edited_messages_filename = "data/edited_messages_log.json"
+        # # Load existing data or create an empty list
+        # try:
+        #     with open(edited_messages_filename, 'r', encoding='utf-8') as f:
+        #         log_entries = json.load(f)
+        # except (FileNotFoundError, json.JSONDecodeError):
+        #     log_entries = []
 
-        # Load existing data or create an empty list
-        try:
-            with open(edited_messages_filename, 'r', encoding='utf-8') as f:
-                log_entries = json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            log_entries = []
+        # # Append the new edited message data
+        # log_entries.append(edited_message_data)
 
-        # Append the new edited message data
-        log_entries.append(edited_message_data)
-
-        # Save the updated data back to the JSON file
-        try:
-            with open(edited_messages_filename, 'w', encoding='utf-8') as f:
-                json.dump(log_entries, f, ensure_ascii=False, indent=4)
-            print(f"Successfully logged edited message to {edited_messages_filename}")
-        except IOError as e:
-            print(f"Error saving edited message log to file: {e}")
+        # # Save the updated data back to the JSON file
+        # try:
+        #     with open(edited_messages_filename, 'w', encoding='utf-8') as f:
+        #         json.dump(log_entries, f, ensure_ascii=False, indent=4)
+        #     print(f"Successfully logged edited message to {edited_messages_filename}")
+        # except IOError as e:
+        #     print(f"Error saving edited message log to file: {e}")
 
 
         # Create an embed for Discord channel logging
@@ -763,7 +785,7 @@ class Message(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     member_id: Optional[int] = Field(foreign_key="member.id")
     channel_id: Optional[int] = Field(foreign_key="channel.id")
-    content: Optional[str] = Field(max_length=256)
+    content: Optional[str] = Field(max_length=2000)
     created_at: Optional[datetime]
     
     member: "Member" = Relationship(back_populates="messages")
@@ -793,6 +815,18 @@ class Role(SQLModel, table=True):
     permissions: Optional[int] = Field()
     created_at: Optional[datetime]
 
+class DeletedMessage(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    message_id: Optional[int] = Field(default=None) # Use this to find user_id, content, and all dat shit
+    content: Optional[str] = Field(max_length=256)
+    deleted_at: Optional[datetime]
+    
+class EditedMessage(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    message_id: Optional[int] = Field(default=None) # Use this to find user_id, content, and all dat shit
+    content_before: Optional[str] = Field(max_length=2000)
+    content_after: Optional[str] = Field(max_length=2000)
+    edited_at: Optional[datetime]
 
 # ==== End of SQL Schema ====
 
