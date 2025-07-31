@@ -315,7 +315,7 @@ class MyClient(discord.Client):
 
     
     # Logging Voice channels
-    async def on_voice_state_update(self, member, before, after):
+    async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
         """
         This event is called when a member's voice state changes.
         (e.g., joining, leaving, moving, muting, deafening voice channels)
@@ -327,6 +327,37 @@ class MyClient(discord.Client):
         # Ensure we are only logging within guilds
         if member.guild is None:
             return
+        
+        log_type = ""
+        from_channel_id = None
+        to_channel_id = None
+        if before.channel is None and after.channel is not None:
+            log_type = "voice_join"
+            to_channel_id = after.channel.id
+        elif before.channel is not None and after.channel is None:
+            log_type = "voice_leave"
+            from_channel_id = before.channel.id
+        elif before.channel is not None and after.channel is not None and before.channel != after.channel:
+            log_type = "voice_move"
+            from_channel_id = before.channel.id
+            to_channel_id = after.channel.id
+            
+
+        current_time_utc = datetime.utcnow()
+        
+        voice_activity_instance = voiceActivity(
+            action=log_type,
+            member_id=member.id,
+            from_channel_id=from_channel_id,
+            to_channel_id=to_channel_id,
+            timestamp=current_time_utc
+        )
+        
+        with Session(engine) as session:
+            session.add(voice_activity_instance)
+            session.commit()
+
+            
 
         # Get the log channel
         log_channel = self.get_channel(1400106801562914889)
@@ -334,7 +365,6 @@ class MyClient(discord.Client):
             print(f"Log channel with ID {self.log_channel_id} not found for voice state updates.")
             return
 
-        current_time_utc = datetime.utcnow()
         embed = None
         log_data = {}
         log_type = "" # To identify join/leave/move for JSON logging
@@ -418,21 +448,21 @@ class MyClient(discord.Client):
         # If an embed was created, send it to Discord and log to JSON
         if embed:
             # Save to JSON file
-            voice_log_filename = "data/voice_channel_log.json"
-            try:
-                with open(voice_log_filename, 'r', encoding='utf-8') as f:
-                    log_entries = json.load(f)
-            except (FileNotFoundError, json.JSONDecodeError):
-                log_entries = []
+            # voice_log_filename = "data/voice_channel_log.json"
+            # try:
+            #     with open(voice_log_filename, 'r', encoding='utf-8') as f:
+            #         log_entries = json.load(f)
+            # except (FileNotFoundError, json.JSONDecodeError):
+            #     log_entries = []
 
-            log_entries.append(log_data)
+            # log_entries.append(log_data)
 
-            try:
-                with open(voice_log_filename, 'w', encoding='utf-8') as f:
-                    json.dump(log_entries, f, ensure_ascii=False, indent=4)
-                print(f"Successfully logged {log_type} event to {voice_log_filename}")
-            except IOError as e:
-                print(f"Error saving {log_type} log to file: {e}")
+            # try:
+            #     with open(voice_log_filename, 'w', encoding='utf-8') as f:
+            #         json.dump(log_entries, f, ensure_ascii=False, indent=4)
+            #     print(f"Successfully logged {log_type} event to {voice_log_filename}")
+            # except IOError as e:
+            #     print(f"Error saving {log_type} log to file: {e}")
 
             # Send to Discord channel
             try:
@@ -827,6 +857,14 @@ class EditedMessage(SQLModel, table=True):
     content_before: Optional[str] = Field(max_length=2000)
     content_after: Optional[str] = Field(max_length=2000)
     edited_at: Optional[datetime]
+    
+class voiceActivity(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    member_id: Optional[int] = Field()
+    action: Optional[str] = Field(max_length=256)
+    from_channel_id: Optional[int] = Field()
+    to_channel_id: Optional[int] = Field()
+    timestamp: Optional[datetime]
 
 # ==== End of SQL Schema ====
 
