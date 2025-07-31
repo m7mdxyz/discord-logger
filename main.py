@@ -345,7 +345,7 @@ class MyClient(discord.Client):
 
         current_time_utc = datetime.utcnow()
         
-        voice_activity_instance = voiceActivity(
+        voice_activity_instance = VoiceActivity(
             action=log_type,
             member_id=member.id,
             from_channel_id=from_channel_id,
@@ -474,12 +474,25 @@ class MyClient(discord.Client):
                 print(f"Failed to send {log_type} log to Discord: {e}")
 
     # Logging joining the guild
-    async def on_member_join(self, member):
+    async def on_member_join(self, member: discord.Member):
         """
         Logs when a new member joins the guild.
         """
         if member.bot:
             return
+        
+        current_time_utc = datetime.utcnow()
+        
+        guild_activity_instance = GuildActivity(
+            action="Join",
+            member_id=member.id,
+            timestamp=current_time_utc
+        )
+        
+        with Session(engine) as session:
+            session.add(guild_activity_instance)
+            session.commit()
+
 
         log_channel = self.get_channel(1400109597712318464)
         if not log_channel:
@@ -488,7 +501,6 @@ class MyClient(discord.Client):
 
         # --- FIX STARTS HERE ---
         # Get the current time as a timezone-aware UTC datetime object
-        current_time_utc = datetime.now(timezone.utc)
         
         # member.created_at is already a timezone-aware UTC datetime object from discord.py
         # Now, both datetimes are timezone-aware and in the same timezone (UTC),
@@ -506,34 +518,48 @@ class MyClient(discord.Client):
         embed.set_footer(text=f"ID: {member.id} • Joined at: {current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC')}")
 
         # JSON Logging
-        log_data = {
-            "event_type": "member_join",
-            "timestamp_utc": current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC'),
-            "user_id": member.id,
-            "user_name": str(member),
-            "guild_id": member.guild.id,
-            "guild_name": member.guild.name,
-            "account_created_at_utc": member.created_at.strftime('%Y-%m-%d %H:%M:%S UTC'),
-            "account_age_days": account_age.days
-        }
-        self._save_log_to_json("data/members_log.json", log_data) # Helper function to save JSON
+        # log_data = {
+        #     "event_type": "member_join",
+        #     "timestamp_utc": current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC'),
+        #     "user_id": member.id,
+        #     "user_name": str(member),
+        #     "guild_id": member.guild.id,
+        #     "guild_name": member.guild.name,
+        #     "account_created_at_utc": member.created_at.strftime('%Y-%m-%d %H:%M:%S UTC'),
+        #     "account_age_days": account_age.days
+        # }
+        # self._save_log_to_json("data/members_log.json", log_data) # Helper function to save JSON
 
-        try:
-            await log_channel.send(embed=embed)
-            print(f"Logged member join: {member} in {member.guild.name}")
-        except discord.Forbidden:
-            print(f"Bot does not have permissions to send messages in log channel {log_channel.name}")
-        except discord.HTTPException as e:
-            print(f"Failed to send member join log: {e}")
+        # try:
+        #     await log_channel.send(embed=embed)
+        #     print(f"Logged member join: {member} in {member.guild.name}")
+        # except discord.Forbidden:
+        #     print(f"Bot does not have permissions to send messages in log channel {log_channel.name}")
+        # except discord.HTTPException as e:
+        #     print(f"Failed to send member join log: {e}")
     
     # Logging leaving the guild
-    async def on_member_remove(self, member):
+    async def on_member_remove(self, member: discord.Member):
         """
         Logs when a member leaves or is kicked from the guild.
         (Note: Doesn't differentiate between leave and kick directly, use audit logs for that)
         """
         if member.bot:
             return
+             
+        current_time_utc = datetime.utcnow()
+        
+        guild_activity_instance = GuildActivity(
+            action="leave/kick",
+            member_id=member.id,
+            timestamp=current_time_utc
+        )
+        
+        with Session(engine) as session:
+            session.add(guild_activity_instance)
+            session.commit()
+
+
 
         log_channel = self.get_channel(1400109636211834973)
         if not log_channel:
@@ -551,23 +577,23 @@ class MyClient(discord.Client):
         embed.set_footer(text=f"ID: {member.id} • Left at: {current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC')}")
 
         # JSON Logging
-        log_data = {
-            "event_type": "member_leave",
-            "timestamp_utc": current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC'),
-            "user_id": member.id,
-            "user_name": str(member),
-            "guild_id": member.guild.id,
-            "guild_name": member.guild.name
-        }
-        self._save_log_to_json("data/members_log.json", log_data)
+        # log_data = {
+        #     "event_type": "member_leave",
+        #     "timestamp_utc": current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC'),
+        #     "user_id": member.id,
+        #     "user_name": str(member),
+        #     "guild_id": member.guild.id,
+        #     "guild_name": member.guild.name
+        # }
+        # self._save_log_to_json("data/members_log.json", log_data)
 
-        try:
-            await log_channel.send(embed=embed)
-            print(f"Logged member leave: {member} from {member.guild.name}")
-        except discord.Forbidden:
-            print(f"Bot does not have permissions to send messages in log channel {log_channel.name}")
-        except discord.HTTPException as e:
-            print(f"Failed to send member leave log: {e}")
+        # try:
+        #     await log_channel.send(embed=embed)
+        #     print(f"Logged member leave: {member} from {member.guild.name}")
+        # except discord.Forbidden:
+        #     print(f"Bot does not have permissions to send messages in log channel {log_channel.name}")
+        # except discord.HTTPException as e:
+        #     print(f"Failed to send member leave log: {e}")
 
     # Logging member update
     async def on_member_update(self, before, after):
@@ -715,7 +741,7 @@ class MyClient(discord.Client):
                 except discord.HTTPException as e:
                     print(f"Failed to send member timeout removal log: {e}")
     # Logging member ban from guild
-    async def on_member_ban(self, guild, user):
+    async def on_member_ban(self, guild, user: discord.User):
         """
         Logs when a member is banned from the guild.
         """
@@ -725,6 +751,18 @@ class MyClient(discord.Client):
             return
 
         current_time_utc = datetime.utcnow()
+        
+        guild_activity_instance = GuildActivity(
+            action="Ban",
+            member_id=user.id,
+            timestamp=current_time_utc
+        )
+        
+        with Session(engine) as session:
+            session.add(guild_activity_instance)
+            session.commit()
+
+
 
         embed = discord.Embed(
             title="Member Banned",
@@ -734,27 +772,27 @@ class MyClient(discord.Client):
         embed.set_author(name=f"{user.display_name} ({user})", icon_url=user.avatar)
         embed.set_footer(text=f"ID: {user.id} • Banned at: {current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC')}")
 
-        # JSON Logging
-        log_data = {
-            "event_type": "member_banned",
-            "timestamp_utc": current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC'),
-            "user_id": user.id,
-            "user_name": str(user),
-            "guild_id": guild.id,
-            "guild_name": guild.name
-        }
-        self._save_log_to_json("data/members_log.json", log_data)
+        # # JSON Logging
+        # log_data = {
+        #     "event_type": "member_banned",
+        #     "timestamp_utc": current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC'),
+        #     "user_id": user.id,
+        #     "user_name": str(user),
+        #     "guild_id": guild.id,
+        #     "guild_name": guild.name
+        # }
+        # self._save_log_to_json("data/members_log.json", log_data)
 
-        try:
-            await log_channel.send(embed=embed)
-            print(f"Logged member ban: {user} in {guild.name}")
-        except discord.Forbidden:
-            print(f"Bot does not have permissions to send messages in log channel {log_channel.name}")
-        except discord.HTTPException as e:
-            print(f"Failed to send member ban log: {e}")
+        # try:
+        #     await log_channel.send(embed=embed)
+        #     print(f"Logged member ban: {user} in {guild.name}")
+        # except discord.Forbidden:
+        #     print(f"Bot does not have permissions to send messages in log channel {log_channel.name}")
+        # except discord.HTTPException as e:
+        #     print(f"Failed to send member ban log: {e}")
 
     # Logging member unban
-    async def on_member_unban(self, guild, user):
+    async def on_member_unban(self, guild, user: discord.User):
         """
         Logs when a member is unbanned from the guild.
         """
@@ -764,6 +802,16 @@ class MyClient(discord.Client):
             return
 
         current_time_utc = datetime.utcnow()
+        
+        guild_activity_instance = GuildActivity(
+            action="Unban",
+            member_id=user.id,
+            timestamp=current_time_utc
+        )
+        
+        with Session(engine) as session:
+            session.add(guild_activity_instance)
+            session.commit()
 
         embed = discord.Embed(
             title="Member Unbanned",
@@ -774,23 +822,23 @@ class MyClient(discord.Client):
         embed.set_footer(text=f"ID: {user.id} • Unbanned at: {current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC')}")
 
         # JSON Logging
-        log_data = {
-            "event_type": "member_unbanned",
-            "timestamp_utc": current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC'),
-            "user_id": user.id,
-            "user_name": str(user),
-            "guild_id": guild.id,
-            "guild_name": guild.name
-        }
-        self._save_log_to_json("data/members_log.json", log_data)
+        # log_data = {
+        #     "event_type": "member_unbanned",
+        #     "timestamp_utc": current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC'),
+        #     "user_id": user.id,
+        #     "user_name": str(user),
+        #     "guild_id": guild.id,
+        #     "guild_name": guild.name
+        # }
+        # self._save_log_to_json("data/members_log.json", log_data)
 
-        try:
-            await log_channel.send(embed=embed)
-            print(f"Logged member unban: {user} in {guild.name}")
-        except discord.Forbidden:
-            print(f"Bot does not have permissions to send messages in log channel {log_channel.name}")
-        except discord.HTTPException as e:
-            print(f"Failed to send member unban log: {e}")
+        # try:
+        #     await log_channel.send(embed=embed)
+        #     print(f"Logged member unban: {user} in {guild.name}")
+        # except discord.Forbidden:
+        #     print(f"Bot does not have permissions to send messages in log channel {log_channel.name}")
+        # except discord.HTTPException as e:
+        #     print(f"Failed to send member unban log: {e}")
 
     # Helper function to save logs to JSON (add this to your MyClient class)
     def _save_log_to_json(self, filename, new_entry):
@@ -858,12 +906,18 @@ class EditedMessage(SQLModel, table=True):
     content_after: Optional[str] = Field(max_length=2000)
     edited_at: Optional[datetime]
     
-class voiceActivity(SQLModel, table=True):
+class VoiceActivity(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     member_id: Optional[int] = Field()
     action: Optional[str] = Field(max_length=256)
     from_channel_id: Optional[int] = Field()
     to_channel_id: Optional[int] = Field()
+    timestamp: Optional[datetime]
+    
+class GuildActivity(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    action: Optional[str] = Field(max_length=256)
+    member_id: Optional[int] = Field()
     timestamp: Optional[datetime]
 
 # ==== End of SQL Schema ====
