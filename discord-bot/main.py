@@ -42,7 +42,6 @@ class MyClient(discord.Client):
                     created_at=member.created_at
                 )
                 
-                
                 existing = session.get(Member, member_instance.id)
                 if existing:
                     continue
@@ -133,18 +132,11 @@ class MyClient(discord.Client):
             session.add(deleted_message_instance)
             session.commit()
 
-
-
         # Find the log channel
-        # log_channel = self.get_channel(self.log_channel_id)
-        # log_channel = message.channel
-        # set channel to 1400089569537298453
         log_channel = self.get_channel(1400089569537298453)
-        # print(type(log_channel))
         if not log_channel:
             print(f"Log channel with ID {log_channel} not found.")
             return
-
 
         # Create an embed for a cleaner look (for Discord channel logging)
         embed = discord.Embed(
@@ -167,7 +159,6 @@ class MyClient(discord.Client):
             print(f"Bot does not have permissions to send messages in log channel {log_channel.name}")
         except discord.HTTPException as e:
             print(f"Failed to send deleted message log to Discord: {e}")
-    
     
     # Logging edited messages
     async def on_message_edit(self, before: discord.Message, after: discord.Message):
@@ -208,15 +199,11 @@ class MyClient(discord.Client):
             session.add(edited_message_instance)
             session.commit()
 
-
-
         # Get the log channel
-        # log_channel = self.get_channel(self.log_channel_id) # Use your defined log channel ID
         log_channel = self.get_channel(1400105881617567845)
         if not log_channel:
             print(f"Log channel with ID {self.log_channel_id} not found for edited messages.")
             return
-
 
         # Create an embed for Discord channel logging
         embed = discord.Embed(
@@ -239,7 +226,6 @@ class MyClient(discord.Client):
         # Add the "Jump to Message" link
         embed.add_field(name="Jump to Message", value=f"[Click Here]({after.jump_url})", inline=False)
 
-
         try:
             await log_channel.send(embed=embed)
             print(f"Sent edited message log to Discord channel {log_channel.name}")
@@ -248,7 +234,6 @@ class MyClient(discord.Client):
         except discord.HTTPException as e:
             print(f"Failed to send edited message log to Discord: {e}")
 
-    
     # Logging Voice channels
     async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
         """
@@ -266,6 +251,9 @@ class MyClient(discord.Client):
         log_type = ""
         from_channel_id = None
         to_channel_id = None
+        details = {}
+        
+        # Channel join/leave/move events
         if before.channel is None and after.channel is not None:
             log_type = "voice_join"
             to_channel_id = after.channel.id
@@ -276,23 +264,62 @@ class MyClient(discord.Client):
             log_type = "voice_move"
             from_channel_id = before.channel.id
             to_channel_id = after.channel.id
+        
+        # Check for other voice state changes only if no channel change was detected
+        if not log_type:
+            # Server mute/unmute events
+            if before.mute != after.mute:
+                log_type = "voice_mute" if after.mute else "voice_unmute"
+                details['mute_status'] = after.mute
             
+            # Server deafen/undeafen events
+            elif before.deaf != after.deaf:
+                log_type = "voice_deafen" if after.deaf else "voice_undeafen"
+                details['deafen_status'] = after.deaf
+            
+            # Self-deafen/self-undeafen events (check before self-mute to prioritize)
+            elif before.self_deaf != after.self_deaf:
+                log_type = "voice_self_deafen" if after.self_deaf else "voice_self_undeafen"
+                details['self_deafen_status'] = after.self_deaf
+            
+            # Self-mute/self-unmute events
+            elif before.self_mute != after.self_mute:
+                # Only log self-mute if self-deafen is not also changing
+                if before.self_deaf == after.self_deaf:
+                    log_type = "voice_self_mute" if after.self_mute else "voice_self_unmute"
+                    details['self_mute_status'] = after.self_mute
+            
+            # Video start/stop events
+            elif before.self_video != after.self_video:
+                log_type = "video_start" if after.self_video else "video_stop"
+                details['video_status'] = after.self_video
+            
+            # Streaming start/stop events
+            elif before.self_stream != after.self_stream:
+                log_type = "streaming_start" if after.self_stream else "streaming_stop"
+                details['streaming_status'] = after.self_stream
+        
+        # If no voice state change was detected, return
+        if not log_type:
+            return
 
         current_time_utc = datetime.utcnow()
+        
+        # Convert details to JSON for storage
+        details_json = json.dumps(details) if details else None
         
         voice_activity_instance = VoiceActivity(
             action=log_type,
             member_id=member.id,
             from_channel_id=from_channel_id,
             to_channel_id=to_channel_id,
-            timestamp=current_time_utc
+            timestamp=current_time_utc,
+            details=details_json
         )
         
         with Session(engine) as session:
             session.add(voice_activity_instance)
             session.commit()
-
-            
 
         # Get the log channel
         log_channel = self.get_channel(1400106801562914889)
@@ -301,88 +328,134 @@ class MyClient(discord.Client):
             return
 
         embed = None
-        log_data = {}
-        log_type = "" # To identify join/leave/move for JSON logging
+        color = None
 
-        # Member joined a voice channel
-        if before.channel is None and after.channel is not None:
-            log_type = "voice_join"
+        # Handle different voice activity types
+        if log_type == "voice_join":
             embed = discord.Embed(
                 title=f"{member.display_name} joined voice channel",
                 description=f"**Channel:** {after.channel.mention}",
-                color=discord.Color.green() # Green for join
+                color=discord.Color.green()
             )
-            embed.set_author(name=f"{member.display_name} ({member})", icon_url=member.avatar)
-            embed.add_field(name="User ID", value=member.id, inline=True)
-            embed.add_field(name="Channel ID", value=after.channel.id, inline=True)
-            embed.set_footer(text=f"Joined at: {current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC')}")
-
-            log_data = {
-                "event_type": log_type,
-                "timestamp_utc": current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC'),
-                "user_id": member.id,
-                "user_name": str(member),
-                "guild_id": member.guild.id,
-                "guild_name": member.guild.name,
-                "channel_id": after.channel.id,
-                "channel_name": after.channel.name
-            }
-
-        # Member left a voice channel
-        elif before.channel is not None and after.channel is None:
-            log_type = "voice_leave"
+            color = discord.Color.green
+            
+        elif log_type == "voice_leave":
             embed = discord.Embed(
                 title=f"{member.display_name} left voice channel",
                 description=f"**Channel:** {before.channel.mention}",
-                color=discord.Color.red() # Red for leave
+                color=discord.Color.red()
             )
-            embed.set_author(name=f"{member.display_name} ({member})", icon_url=member.avatar)
-            embed.add_field(name="User ID", value=member.id, inline=True)
-            embed.add_field(name="Channel ID", value=before.channel.id, inline=True)
-            embed.set_footer(text=f"Left at: {current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC')}")
-
-            log_data = {
-                "event_type": log_type,
-                "timestamp_utc": current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC'),
-                "user_id": member.id,
-                "user_name": str(member),
-                "guild_id": member.guild.id,
-                "guild_name": member.guild.name,
-                "channel_id": before.channel.id,
-                "channel_name": before.channel.name
-            }
-
-        # Member moved voice channels
-        elif before.channel is not None and after.channel is not None and before.channel != after.channel:
-            log_type = "voice_move"
+            color = discord.Color.red
+            
+        elif log_type == "voice_move":
             embed = discord.Embed(
                 title=f"{member.display_name} moved voice channels",
                 description=f"**From:** {before.channel.mention}\n**To:** {after.channel.mention}",
-                color=discord.Color.blue() # Blue for move (or orange)
+                color=discord.Color.blue()
             )
+            color = discord.Color.blue
+            
+        elif log_type == "voice_mute":
+            embed = discord.Embed(
+                title=f"{member.display_name} was server muted",
+                description=f"**Channel:** {before.channel.mention if before.channel else 'N/A'}",
+                color=discord.Color.orange()
+            )
+            color = discord.Color.orange
+            
+        elif log_type == "voice_unmute":
+            embed = discord.Embed(
+                title=f"{member.display_name} was server unmuted",
+                description=f"**Channel:** {before.channel.mention if before.channel else 'N/A'}",
+                color=discord.Color.dark_green()
+            )
+            color = discord.Color.dark_green
+            
+        elif log_type == "voice_deafen":
+            embed = discord.Embed(
+                title=f"{member.display_name} was server deafened",
+                description=f"**Channel:** {before.channel.mention if before.channel else 'N/A'}",
+                color=discord.Color.dark_red()
+            )
+            color = discord.Color.dark_red
+            
+        elif log_type == "voice_undeafen":
+            embed = discord.Embed(
+                title=f"{member.display_name} was server undeafened",
+                description=f"**Channel:** {before.channel.mention if before.channel else 'N/A'}",
+                color=discord.Color.purple()
+            )
+            color = discord.Color.purple
+            
+        elif log_type == "voice_self_mute":
+            embed = discord.Embed(
+                title=f"{member.display_name} self-muted",
+                description=f"**Channel:** {before.channel.mention if before.channel else 'N/A'}",
+                color=discord.Color.gold()
+            )
+            color = discord.Color.gold
+            
+        elif log_type == "voice_self_unmute":
+            embed = discord.Embed(
+                title=f"{member.display_name} self-unmuted",
+                description=f"**Channel:** {before.channel.mention if before.channel else 'N/A'}",
+                color=discord.Color.magenta()
+            )
+            color = discord.Color.magenta
+            
+        elif log_type == "voice_self_deafen":
+            embed = discord.Embed(
+                title=f"{member.display_name} self-deafened",
+                description=f"**Channel:** {before.channel.mention if before.channel else 'N/A'}",
+                color=discord.Color.dark_grey()
+            )
+            color = discord.Color.dark_grey
+            
+        elif log_type == "voice_self_undeafen":
+            embed = discord.Embed(
+                title=f"{member.display_name} self-undeafened",
+                description=f"**Channel:** {before.channel.mention if before.channel else 'N/A'}",
+                color=discord.Color.light_grey()
+            )
+            color = discord.Color.light_grey
+            
+        elif log_type == "video_start":
+            embed = discord.Embed(
+                title=f"{member.display_name} started video",
+                description=f"**Channel:** {before.channel.mention if before.channel else 'N/A'}",
+                color=discord.Color.teal()
+            )
+            color = discord.Color.teal
+            
+        elif log_type == "video_stop":
+            embed = discord.Embed(
+                title=f"{member.display_name} stopped video",
+                description=f"**Channel:** {before.channel.mention if before.channel else 'N/A'}",
+                color=discord.Color.dark_teal()
+            )
+            color = discord.Color.dark_teal
+            
+        elif log_type == "streaming_start":
+            embed = discord.Embed(
+                title=f"{member.display_name} started streaming",
+                description=f"**Channel:** {before.channel.mention if before.channel else 'N/A'}",
+                color=discord.Color.red()
+            )
+            color = discord.Color.red
+            
+        elif log_type == "streaming_stop":
+            embed = discord.Embed(
+                title=f"{member.display_name} stopped streaming",
+                description=f"**Channel:** {before.channel.mention if before.channel else 'N/A'}",
+                color=discord.Color.dark_red()
+            )
+            color = discord.Color.dark_red
+
+        if embed:
             embed.set_author(name=f"{member.display_name} ({member})", icon_url=member.avatar)
             embed.add_field(name="User ID", value=member.id, inline=True)
-            embed.add_field(name="From Channel ID", value=before.channel.id, inline=True)
-            embed.add_field(name="To Channel ID", value=after.channel.id, inline=True)
-            embed.set_footer(text=f"Moved at: {current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+            embed.set_footer(text=f"ID: {member.id} • {current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC')}")
 
-            log_data = {
-                "event_type": log_type,
-                "timestamp_utc": current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC'),
-                "user_id": member.id,
-                "user_name": str(member),
-                "guild_id": member.guild.id,
-                "guild_name": member.guild.name,
-                "from_channel_id": before.channel.id,
-                "from_channel_name": before.channel.name,
-                "to_channel_id": after.channel.id,
-                "to_channel_name": after.channel.name
-            }
-        # You could add more conditions here for mute/deafen/stream changes if desired
-
-        # If an embed was created, send it to Discord and log to JSON
-        if embed:
-            # Send to Discord channel
             try:
                 await log_channel.send(embed=embed)
                 print(f"Sent {log_type} log to Discord channel {log_channel.name}")
@@ -390,441 +463,6 @@ class MyClient(discord.Client):
                 print(f"Bot does not have permissions to send messages in log channel {log_channel.name}")
             except discord.HTTPException as e:
                 print(f"Failed to send {log_type} log to Discord: {e}")
-
-    # Logging joining the guild
-    async def on_member_join(self, member: discord.Member):
-        """
-        Logs when a new member joins the guild.
-        """
-        if member.bot:
-            return
-        
-        current_time_utc = datetime.now(timezone.utc)
-        
-        guild_activity_instance = GuildActivity(
-            action="Join",
-            member_id=member.id,
-            timestamp=current_time_utc
-        )
-        member_instance = Member(
-            id= member.id,
-            name= member.name,
-            global_name=member.global_name,
-            avatar_url=str(member.avatar),
-            roles_json=json.dumps([role.id for role in member.roles]),
-            created_at=member.created_at
-        )
-        
-        
-        with Session(engine) as session:
-            existing = session.get(Member, member_instance.id)
-            if not existing:
-                session.add(member_instance)
-            session.add(guild_activity_instance)
-            session.commit()
-
-
-        log_channel = self.get_channel(1400109597712318464)
-        if not log_channel:
-            print(f"Log channel with ID {self.log_channel_id} not found for member join.")
-            return
-
-        # --- FIX STARTS HERE ---
-        # Get the current time as a timezone-aware UTC datetime object
-        
-        # member.created_at is already a timezone-aware UTC datetime object from discord.py
-        # Now, both datetimes are timezone-aware and in the same timezone (UTC),
-        # so subtraction will work correctly.
-        account_age = current_time_utc - member.created_at
-        # --- FIX ENDS HERE ---
-
-        embed = discord.Embed(
-            title="Member Joined",
-            description=f"{member.mention} {member}",
-            color=discord.Color.green() # Green for join
-        )
-        embed.set_thumbnail(url=member.avatar)
-        embed.add_field(name="Account Age", value=f"{account_age.days // 365} years, {(account_age.days % 365) // 30} months, {account_age.days % 30} days", inline=False)
-        embed.set_footer(text=f"ID: {member.id} • Joined at: {current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC')}")
-
-        try:
-            await log_channel.send(embed=embed)
-            print(f"Logged member join: {member} in {member.guild.name}")
-        except discord.Forbidden:
-            print(f"Bot does not have permissions to send messages in log channel {log_channel.name}")
-        except discord.HTTPException as e:
-            print(f"Failed to send member join log: {e}")
-    
-    # Logging leaving the guild
-    async def on_member_remove(self, member: discord.Member):
-        """
-        Logs when a member leaves or is kicked from the guild.
-        (Note: Doesn't differentiate between leave and kick directly, use audit logs for that)
-        """
-        if member.bot:
-            return
-             
-        current_time_utc = datetime.utcnow()
-        
-        guild_activity_instance = GuildActivity(
-            action="leave/kick",
-            member_id=member.id,
-            timestamp=current_time_utc
-        )
-        
-        with Session(engine) as session:
-            session.add(guild_activity_instance)
-            session.commit()
-
-
-
-        log_channel = self.get_channel(1400109636211834973)
-        if not log_channel:
-            print(f"Log channel with ID {self.log_channel_id} not found for member leave.")
-            return
-
-        current_time_utc = datetime.utcnow()
-
-        embed = discord.Embed(
-            title="Member Left",
-            description=f"{member.mention} {member}",
-            color=discord.Color.red() # Red for leave
-        )
-        embed.set_thumbnail(url=member.avatar)
-        embed.set_footer(text=f"ID: {member.id} • Left at: {current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC')}")
-
-
-        try:
-            await log_channel.send(embed=embed)
-            print(f"Logged member leave: {member} from {member.guild.name}")
-        except discord.Forbidden:
-            print(f"Bot does not have permissions to send messages in log channel {log_channel.name}")
-        except discord.HTTPException as e:
-            print(f"Failed to send member leave log: {e}")
-
-    # Logging member update
-    async def on_member_update(self, before: discord.Member, after: discord.Member):
-        """
-        Logs when a member's roles are changed or when they are timed out.
-        """
-        if after.bot:
-            return
-
-        log_channel = self.get_channel(1400109675667525743)
-        if not log_channel:
-            print(f"Log channel with ID {self.log_channel_id} not found for member updates.")
-            return
-
-        current_time_utc = datetime.now(timezone.utc)
-
-        action = ""
-        if before.roles != after.roles:
-            role_id = None
-            added_roles = [role for role in after.roles if role not in before.roles]
-            removed_roles = [role for role in before.roles if role not in after.roles]
-            if added_roles:
-                action = "Role Added"
-                role_id = added_roles[0].id
-
-                # Update the member roles in Member table                
-                with Session(engine) as session:
-                    statement = select(Member).where(Member.id == after.id)
-                    member_to_update = session.exec(statement).one()
-                    current_roles = json.loads(member_to_update.roles_json or "[]")
-                    if role_id not in current_roles:
-                        current_roles.append(role_id)
-                    member_to_update.roles_json = json.dumps(current_roles)
-                    session.add(member_to_update)
-                    session.commit()
-                                    
-            elif removed_roles:
-                action = "Role Removed"
-                role_id = removed_roles[0].id
-                
-                # Update the member roles in Member table                
-                with Session(engine) as session:
-                    statement = select(Member).where(Member.id == after.id)
-                    member_to_update = session.exec(statement).one()
-                    current_roles = json.loads(member_to_update.roles_json or "[]")
-                    if role_id in current_roles:
-                        current_roles.remove(role_id)
-                    member_to_update.roles_json = json.dumps(current_roles)
-                    session.add(member_to_update)
-                    session.commit()
-
-            member_activity_instance = MemberActivity(
-                member_id=after.id,
-                action=action,
-                role_id=role_id,
-                timestamp=current_time_utc,
-            )
-            with Session(engine) as session:
-                session.add(member_activity_instance)
-                session.commit()
-                
-        # TODO: Timeout logging into database
-
-
-        # --- Role Changes Logging (Existing) ---
-        if before.roles != after.roles:
-            added_roles = [role for role in after.roles if role not in before.roles]
-            removed_roles = [role for role in before.roles if role not in after.roles]
-
-            if added_roles:
-                for role in added_roles:
-                    embed = discord.Embed(
-                        title=f"{after.display_name} was given a role",
-                        description=f"{after.mention} was given the {role.mention} role",
-                        color=discord.Color.blue()
-                    )
-                    embed.set_author(name=f"{after.display_name} ({after})", icon_url=after.avatar.url if after.avatar else discord.Embed.Empty)
-                    embed.set_footer(text=f"ID: {after.id} • {current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC')}")
-
-
-                    try:
-                        await log_channel.send(embed=embed)
-                        print(f"Logged role added: {role.name} to {after}")
-                    except discord.Forbidden:
-                        print(f"Bot does noß have permissions to send messages in log channel {log_channel.name}")
-                    except discord.HTTPException as e:
-                        print(f"Failed to send role add log: {e}")
-
-            if removed_roles:
-                for role in removed_roles:
-                    embed = discord.Embed(
-                        title=f"{after.display_name} was removed from a role",
-                        description=f"{after.mention} was removed from the {role.mention} role",
-                        color=discord.Color.orange()
-                    )
-                    embed.set_author(name=f"{after.display_name} ({after})", icon_url=after.avatar.url if after.avatar else discord.Embed.Empty)
-                    embed.set_footer(text=f"ID: {after.id} • {current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC')}")
-
-
-                    try:
-                        await log_channel.send(embed=embed)
-                        print(f"Logged role removed: {role.name} from {after}")
-                    except discord.Forbidden:
-                        print(f"Bot does not have permissions to send messages in log channel {log_channel.name}")
-                    except discord.HTTPException as e:
-                        print(f"Failed to send role remove log: {e}")
-
-        # --- Timeout Logging ---
-        if before.timed_out_until != after.timed_out_until:
-            # Member was put in timeout
-            if after.timed_out_until is not None:
-                # Calculate duration if possible (only if it's a new timeout, not just an update to an existing one)
-                timeout_duration = after.timed_out_until - current_time_utc
-                
-                embed = discord.Embed(
-                    title="Member Timed Out",
-                    description=f"{after.mention} {after} was put in timeout.",
-                    color=discord.Color.dark_purple() # A color for timeout
-                )
-                embed.set_author(name=f"{after.display_name} ({after})", icon_url=after.avatar.url if after.avatar else discord.Embed.Empty)
-                embed.add_field(name="Timeout Ends", value=f"<t:{int(after.timed_out_until.timestamp())}:F>", inline=False) # Discord timestamp format
-                embed.add_field(name="Duration", value=f"{timeout_duration.days} days, {timeout_duration.seconds // 3600} hours, {(timeout_duration.seconds % 3600) // 60} minutes, {timeout_duration.seconds % 60} seconds", inline=False)
-                embed.set_footer(text=f"ID: {after.id} • Timed out at: {current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC')}")
-
-                log_data = {
-                    "event_type": "member_timed_out",
-                    "timestamp_utc": current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC'),
-                    "user_id": after.id,
-                    "user_name": str(after),
-                    "guild_id": after.guild.id,
-                    "guild_name": after.guild.name,
-                    "timeout_ends_utc": after.timed_out_until.strftime('%Y-%m-%d %H:%M:%S UTC'),
-                    "timeout_duration_seconds": timeout_duration.total_seconds()
-                }
-                self._save_log_to_json("data/members_log.json", log_data) # Using the same member_log for consistency
-
-                try:
-                    await log_channel.send(embed=embed)
-                    print(f"Logged member timed out: {after} in {after.guild.name}")
-                except discord.Forbidden:
-                    print(f"Bot does not have permissions to send messages in log channel {log_channel.name}")
-                except discord.HTTPException as e:
-                    print(f"Failed to send member timeout log: {e}")
-
-            # Member's timeout ended or was removed
-            elif before.timed_out_until is not None and after.timed_out_until is None:
-                embed = discord.Embed(
-                    title="Member Timeout Removed",
-                    description=f"{after.mention} {after}'s timeout was removed.",
-                    color=discord.Color.dark_green() # A different color for timeout removal
-                )
-                embed.set_author(name=f"{after.display_name} ({after})", icon_url=after.avatar.url if after.avatar else discord.Embed.Empty)
-                embed.set_footer(text=f"ID: {after.id} • Timeout removed at: {current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC')}")
-
-                log_data = {
-                    "event_type": "member_timeout_removed",
-                    "timestamp_utc": current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC'),
-                    "user_id": after.id,
-                    "user_name": str(after),
-                    "guild_id": after.guild.id,
-                    "guild_name": after.guild.name,
-                    "previous_timeout_ends_utc": before.timed_out_until.strftime('%Y-%m-%d %H:%M:%S UTC') if before.timed_out_until else "N/A"
-                }
-                self._save_log_to_json("data/members_log.json", log_data)
-
-                try:
-                    await log_channel.send(embed=embed)
-                    print(f"Logged member timeout removed: {after} in {after.guild.name}")
-                except discord.Forbidden:
-                    print(f"Bot does not have permissions to send messages in log channel {log_channel.name}")
-                except discord.HTTPException as e:
-                    print(f"Failed to send member timeout removal log: {e}")
-    # Logging member ban from guild
-    async def on_member_ban(self, guild, user: discord.User):
-        """
-        Logs when a member is banned from the guild.
-        """
-        log_channel = self.get_channel(1400109675667525743)
-        if not log_channel:
-            print(f"Log channel with ID {self.log_channel_id} not found for member ban.")
-            return
-
-        current_time_utc = datetime.utcnow()
-        
-        guild_activity_instance = GuildActivity(
-            action="Ban",
-            member_id=user.id,
-            timestamp=current_time_utc
-        )
-        
-        with Session(engine) as session:
-            session.add(guild_activity_instance)
-            session.commit()
-
-
-
-        embed = discord.Embed(
-            title="Member Banned",
-            description=f"{user.mention} {user} was banned.",
-            color=discord.Color.dark_red() # Dark red for ban
-        )
-        embed.set_author(name=f"{user.display_name} ({user})", icon_url=user.avatar)
-        embed.set_footer(text=f"ID: {user.id} • Banned at: {current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC')}")
-
-        try:
-            await log_channel.send(embed=embed)
-            print(f"Logged member ban: {user} in {guild.name}")
-        except discord.Forbidden:
-            print(f"Bot does not have permissions to send messages in log channel {log_channel.name}")
-        except discord.HTTPException as e:
-            print(f"Failed to send member ban log: {e}")
-
-    # Logging member unban
-    async def on_member_unban(self, guild, user: discord.User):
-        """
-        Logs when a member is unbanned from the guild.
-        """
-        log_channel = self.get_channel(1400109675667525743)
-        if not log_channel:
-            print(f"Log channel with ID {self.log_channel_id} not found for member unban.")
-            return
-
-        current_time_utc = datetime.utcnow()
-        
-        guild_activity_instance = GuildActivity(
-            action="Unban",
-            member_id=user.id,
-            timestamp=current_time_utc
-        )
-        
-        with Session(engine) as session:
-            session.add(guild_activity_instance)
-            session.commit()
-
-        embed = discord.Embed(
-            title="Member Unbanned",
-            description=f"{user.mention} {user} was unbanned.",
-            color=discord.Color.green() # Green for unban
-        )
-        embed.set_author(name=f"{user.display_name} ({user})", icon_url=user.avatar)
-        embed.set_footer(text=f"ID: {user.id} • Unbanned at: {current_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC')}")
-
-        try:
-            await log_channel.send(embed=embed)
-            print(f"Logged member unban: {user} in {guild.name}")
-        except discord.Forbidden:
-            print(f"Bot does not have permissions to send messages in log channel {log_channel.name}")
-        except discord.HTTPException as e:
-            print(f"Failed to send member unban log: {e}")
-
-    # Helper function to save logs to JSON (add this to your MyClient class)
-    def _save_log_to_json(self, filename, new_entry):
-        try:
-            with open(filename, 'r', encoding='utf-8') as f:
-                log_entries = json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            log_entries = []
-
-        log_entries.append(new_entry)
-
-        try:
-            with open(filename, 'w', encoding='utf-8') as f:
-                json.dump(log_entries, f, ensure_ascii=False, indent=4)
-        except IOError as e:
-            print(f"Error saving log to {filename}: {e}")
-    
-    # Logging role creation
-    async def on_guild_role_create(self, role: discord.Role):
-        """
-        Logs when a new role is created in the guild.
-        """
-        role_instance = Role(
-            id=role.id,
-            name=role.name,
-            color=f"#{role.color.value:06x}",
-            permissions=role.permissions.value,
-            created_at=role.created_at,
-        )
-        
-        with Session(engine) as session:
-            session.add(role_instance)
-            session.commit()
-        
-        print(f"New role created and logged: {role.name} (ID: {role.id})")
-    
-    # Logging role deletion (keeping record in database)
-    async def on_guild_role_delete(self, role: discord.Role):
-        """
-        Logs when a role is deleted from the guild.
-        Note: We don't delete the role from database to maintain historical data.
-        """
-        print(f"Role deleted from server but kept in database: {role.name} (ID: {role.id})")
-        # The role record remains in the database for historical purposes
-        
-    # Logging role updates
-    async def on_guild_role_update(self, before: discord.Role, after: discord.Role):
-        """
-        Logs when a role is updated (name, color, permissions, etc.)
-        """
-        # Check if any relevant attributes changed
-        if (before.name != after.name or 
-            before.color != after.color or 
-            before.permissions != after.permissions):
-            
-            # Update role in database
-            with Session(engine) as session:
-                statement = select(Role).where(Role.id == after.id)
-                role_to_update = session.exec(statement).first()
-                if role_to_update:
-                    if before.name != after.name:
-                        role_to_update.name = after.name
-                        print(f"Role name updated: {before.name} -> {after.name} (ID: {after.id})")
-                    
-                    if before.color != after.color:
-                        role_to_update.color = f"#{after.color.value:06x}"
-                        print(f"Role color updated: {before.color} -> {after.color} (ID: {after.id})")
-                    
-                    if before.permissions != after.permissions:
-                        role_to_update.permissions = after.permissions.value
-                        print(f"Role permissions updated for role: {after.name} (ID: {after.id})")
-                    
-                    session.add(role_to_update)
-                    session.commit()
-
 
 # ==== End of bot's logic ====
 
@@ -877,7 +515,8 @@ class EditedMessage(SQLModel, table=True):
     content_before: Optional[str] = Field(max_length=2000)
     content_after: Optional[str] = Field(max_length=2000)
     edited_at: Optional[datetime]
-    
+
+
 class VoiceActivity(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     member_id: Optional[int] = Field()
@@ -885,6 +524,9 @@ class VoiceActivity(SQLModel, table=True):
     from_channel_id: Optional[int] = Field()
     to_channel_id: Optional[int] = Field()
     timestamp: Optional[datetime]
+    details: Optional[str] = Field()  # JSON field for additional details
+
+
     
 class GuildActivity(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -915,9 +557,6 @@ token = os.getenv("BOT_TOKEN")
 engine = create_engine("sqlite:///discord-bot/database/orm.db")
 SQLModel.metadata.create_all(engine)
 
-
-
 client.run(token)
-
 
 # ==== End of main logic ====
