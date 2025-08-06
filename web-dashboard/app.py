@@ -4,12 +4,13 @@ from datetime import datetime
 from flask import Flask, render_template
 from sqlmodel import SQLModel, create_engine, Session, select, Field
 from typing import List, Optional
+from dotenv import load_dotenv
 
 
 app = Flask(__name__)
 
 # Add database connection
-engine = create_engine("sqlite:///../discord-bot/database/orm.db")
+engine = create_engine("sqlite:///discord-bot/database/orm.db")
 
 
 # Add a context processor to make the current year available to all templates
@@ -368,4 +369,5 @@ class MemberActivity(SQLModel, table=True):
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    load_dotenv()
+    app.run(debug=True, port=os.getenv("DASHBOARD_PORT"))

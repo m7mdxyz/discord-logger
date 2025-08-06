@@ -549,7 +549,7 @@ intents = discord.Intents.all()
 
 client = MyClient(intents=intents)
 load_dotenv()
-token = os.getenv("BOT_TOKEN")
+#token = os.getenv("BOT_TOKEN")
 # ==== End of Intents, permissions, and tokens ====
 
 # ==== Start of main logic ====
@@ -557,6 +557,6 @@ token = os.getenv("BOT_TOKEN")
 engine = create_engine("sqlite:///discord-bot/database/orm.db")
 SQLModel.metadata.create_all(engine)
 
-client.run(token)
+client.run(os.getenv("BOT_TOKEN"))
 
 # ==== End of main logic ====
