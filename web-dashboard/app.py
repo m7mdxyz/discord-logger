@@ -2,15 +2,23 @@ import os
 import json
 from datetime import datetime
 from flask import Flask, render_template
-from sqlmodel import SQLModel, create_engine, Session, select, Field
-from typing import List, Optional
+from sqlmodel import create_engine, Session, select
 from dotenv import load_dotenv
+
+from sqlmodel import create_engine, Session, select
+
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parents[1]))  # adds project root
+
+from database.schema import *
+from database.db import engine
 
 
 app = Flask(__name__)
 
 # Add database connection
-engine = create_engine("sqlite:///discord-bot/database/orm.db")
+# engine = create_engine("sqlite:///discord-bot/database/orm.db")
 
 
 # Add a context processor to make the current year available to all templates
@@ -301,71 +309,6 @@ def member_activity():
     for activity in activities:
         activity['formatted_timestamp'] = format_timestamp(activity['timestamp'])
     return render_template('member_activity.html', activities=activities)
-
-# SQLModel classes for database access
-class Message(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    member_id: Optional[int] = Field(foreign_key="member.id")
-    channel_id: Optional[int] = Field(foreign_key="channel.id")
-    content: Optional[str] = Field(max_length=2000)
-    created_at: Optional[datetime]
-    is_edited: Optional[bool] = Field(default=False)
-
-class Member(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    name: Optional[str] = Field(max_length=256)
-    global_name: Optional[str] = Field(max_length=256)
-    avatar_url: Optional[str] = Field(max_length=256)
-    created_at: Optional[datetime]
-    roles_json: Optional[str] = Field()
-
-class Channel(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    name: Optional[str] = Field(max_length=256)
-    ch_type: Optional[str] = Field(max_length=256)
-
-class Role(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    name: Optional[str] = Field(max_length=256)
-    color: Optional[str] = Field(max_length=256)
-    permissions: Optional[int] = Field()
-    created_at: Optional[datetime]
-
-class DeletedMessage(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    message_id: Optional[int] = Field(default=None)
-    deleted_at: Optional[datetime]
-
-class EditedMessage(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    message_id: Optional[int] = Field(default=None)
-    content_before: Optional[str] = Field(max_length=2000)
-    content_after: Optional[str] = Field(max_length=2000)
-    edited_at: Optional[datetime]
-
-
-class VoiceActivity(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    member_id: Optional[int] = Field()
-    action: Optional[str] = Field(max_length=256)
-    from_channel_id: Optional[int] = Field()
-    to_channel_id: Optional[int] = Field()
-    timestamp: Optional[datetime]
-    details: Optional[str] = Field()  # JSON field for additional details
-
-class GuildActivity(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    action: Optional[str] = Field(max_length=256)
-    member_id: Optional[int] = Field()
-    timestamp: Optional[datetime]
-
-class MemberActivity(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    action: Optional[str] = Field(max_length=256)
-    member_id: Optional[int] = Field()
-    role_id: Optional[int] = Field()
-    timestamp: Optional[datetime]
-
 
 
 if __name__ == '__main__':

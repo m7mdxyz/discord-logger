@@ -5,9 +5,15 @@ import os
 import json
 from datetime import datetime, timezone
 
-from sqlmodel import SQLModel, Field, create_engine, Session, Relationship, select
-from typing import Optional, List
-from sqlalchemy import JSON as SQLAlchemyJSON
+from sqlmodel import SQLModel, create_engine, Session, select
+
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parents[1]))  # adds project root
+
+from database.schema import *
+from database.db import engine
+
 # ==== End of imports ====
 
 # ==== Start of bot's logic ====
@@ -466,84 +472,6 @@ class MyClient(discord.Client):
 
 # ==== End of bot's logic ====
 
-# ==== Start of SQL Schema ====
-class Message(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    member_id: Optional[int] = Field(foreign_key="member.id")
-    channel_id: Optional[int] = Field(foreign_key="channel.id")
-    content: Optional[str] = Field(max_length=2000)
-    created_at: Optional[datetime]
-    is_edited: Optional[bool] = Field(default=False)
-    
-    member: "Member" = Relationship(back_populates="messages")
-    channel: "Channel" = Relationship(back_populates="messages")
-
-
-class Member(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    name: Optional[str] = Field(max_length=256)
-    global_name: Optional[str] = Field(max_length=256)
-    avatar_url: Optional[str] = Field(max_length=256)
-    created_at: Optional[datetime]
-    roles_json: Optional[str] = Field()
-    
-    messages: List[Message] = Relationship(back_populates="member")
-
-class Channel(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    name: Optional[str] = Field(max_length=256)
-    ch_type: Optional[str] = Field(max_length=256)
-    
-    messages: List[Message] = Relationship(back_populates="channel")
-    
-class Role(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    name: Optional[str] = Field(max_length=256)
-    color: Optional[str] = Field(max_length=256)
-    permissions: Optional[int] = Field()
-    created_at: Optional[datetime]
-
-class DeletedMessage(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    message_id: Optional[int] = Field(default=None) # Use this to find user_id, content, and all dat shit
-    deleted_at: Optional[datetime]
-
-    
-class EditedMessage(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    message_id: Optional[int] = Field(default=None) # Use this to find user_id, content, and all dat shit
-    content_before: Optional[str] = Field(max_length=2000)
-    content_after: Optional[str] = Field(max_length=2000)
-    edited_at: Optional[datetime]
-
-
-class VoiceActivity(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    member_id: Optional[int] = Field()
-    action: Optional[str] = Field(max_length=256)
-    from_channel_id: Optional[int] = Field()
-    to_channel_id: Optional[int] = Field()
-    timestamp: Optional[datetime]
-    details: Optional[str] = Field()  # JSON field for additional details
-
-
-    
-class GuildActivity(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    action: Optional[str] = Field(max_length=256)
-    member_id: Optional[int] = Field()
-    timestamp: Optional[datetime]
-    
-class MemberActivity(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    action: Optional[str] = Field(max_length=256)
-    member_id: Optional[int] = Field()
-    role_id: Optional[int] = Field()
-    timestamp: Optional[datetime]
-
-
-# ==== End of SQL Schema ====
-
 # ==== Start of Intents, permissions, and tokens ====
 intents = discord.Intents.all()
 
@@ -554,7 +482,7 @@ load_dotenv()
 
 # ==== Start of main logic ====
 
-engine = create_engine("sqlite:///discord-bot/database/orm.db")
+# engine = create_engine("sqlite:///discord-bot/database/orm.db")
 SQLModel.metadata.create_all(engine)
 
 client.run(os.getenv("BOT_TOKEN"))
