@@ -109,6 +109,7 @@ o.OOOo.                                    o        o
     
     check_env_variable("./.env", "BOT_TOKEN")
     check_env_variable("./.env", "DASHBOARD_PORT")
+    check_env_variable("./.env", "LOG_TO_DISCORD")
 
     load_dotenv()
     check_valid_port(os.getenv("DASHBOARD_PORT"))

@@ -1,0 +1,8 @@
+{
+    "log_category_id": null,
+    "deleted_messages_channel_id": null,
+    "edited_messages_channel_id": null,
+    "voice_activity_channel_id": null,
+    "guild_activity_channel_id": null,
+    "members_activity_channel_id": null
+}

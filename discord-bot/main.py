@@ -5,7 +5,7 @@ import os
 import json
 from datetime import datetime, timezone
 
-from sqlmodel import SQLModel, create_engine, Session, select
+from sqlmodel import SQLModel, Session, select
 
 import sys
 from pathlib import Path
@@ -95,6 +95,62 @@ class MyClient(discord.Client):
     
                 session.add(role_instance)
                 session.commit()
+        
+        
+        # ==== Set Log Channels ====        
+        log_to_discord = os.getenv("LOG_TO_DISCORD", "false").lower()
+        if log_to_discord != "true":
+            return
+        
+        json_path = "discord-bot/log_channels.json"
+        with open(json_path, "r") as f:
+            log_data = json.load(f)
+        
+        guild = client.guilds[0]
+        updated = False
+
+        # Step 1: Create or fetch the log category
+        log_category_id = log_data.get("log_category_id")
+        log_category = None
+
+        if log_category_id is None:
+            overwrites = {
+                guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                guild.owner: discord.PermissionOverwrite(read_messages=True)
+            }
+            log_category = await guild.create_category("Logs", overwrites=overwrites)
+            log_data["log_category_id"] = log_category.id
+            updated = True
+        else:
+            log_category = discord.utils.get(guild.categories, id=log_category_id)
+
+        # Step 2: Create missing channels
+        channel_map = {
+            "deleted_messages_channel_id": "deleted-messages",
+            "edited_messages_channel_id": "edited-messages",
+            "voice_activity_channel_id": "voice-activity",
+            "guild_activity_channel_id": "guild-activity",
+            "members_activity_channel_id": "member-activity"
+        }
+
+        for key, name in channel_map.items():
+            if log_data.get(key) is None:
+                existing_channel = discord.utils.get(guild.text_channels, name=name)
+                if existing_channel:
+                    log_data[key] = existing_channel.id
+                else:
+                    new_channel = await guild.create_text_channel(name, category=log_category)
+                    log_data[key] = new_channel.id
+                updated = True
+
+        # Step 3: Save changes
+        if updated:
+            with open(json_path, "w") as f:
+                json.dump(log_data, f, indent=4)
+
+        print("Log channels verified/created successfully.")
+
+        
 
     async def on_message(self, message: discord.Message):
         
@@ -137,9 +193,13 @@ class MyClient(discord.Client):
         with Session(engine) as session:
             session.add(deleted_message_instance)
             session.commit()
-
+                
+        log_to_discord = os.getenv("LOG_TO_DISCORD", "false").lower()
+        if log_to_discord != "true":
+            return
         # Find the log channel
-        log_channel = self.get_channel(1400089569537298453)
+        log_channels_json = get_log_channel_json()
+        log_channel = self.get_channel(log_channels_json.get("deleted_messages_channel_id"))
         if not log_channel:
             print(f"Log channel with ID {log_channel} not found.")
             return
@@ -160,7 +220,7 @@ class MyClient(discord.Client):
 
         try:
             await log_channel.send(embed=embed)
-            print(f"Sent deleted message log to Discord channel {log_channel.name}")
+            # print(f"Sent deleted message log to Discord channel {log_channel.name}")
         except discord.Forbidden:
             print(f"Bot does not have permissions to send messages in log channel {log_channel.name}")
         except discord.HTTPException as e:
@@ -204,11 +264,15 @@ class MyClient(discord.Client):
             
             session.add(edited_message_instance)
             session.commit()
-
+        
+        log_to_discord = os.getenv("LOG_TO_DISCORD", "false").lower()
+        if log_to_discord != "true":
+            return
         # Get the log channel
-        log_channel = self.get_channel(1400105881617567845)
+        log_channels_json = get_log_channel_json()
+        log_channel = self.get_channel(log_channels_json.get("edited_messages_channel_id"))
         if not log_channel:
-            print(f"Log channel with ID {self.log_channel_id} not found for edited messages.")
+            print(f"Log channel with ID {log_channel} not found for edited messages.")
             return
 
         # Create an embed for Discord channel logging
@@ -328,9 +392,14 @@ class MyClient(discord.Client):
             session.commit()
 
         # Get the log channel
-        log_channel = self.get_channel(1400106801562914889)
+        log_to_discord = os.getenv("LOG_TO_DISCORD", "false").lower()
+        if log_to_discord != "true":
+            return
+        # Get the log channel
+        log_channels_json = get_log_channel_json()
+        log_channel = self.get_channel(log_channels_json.get("voice_activity_channel_id"))
         if not log_channel:
-            print(f"Log channel with ID {self.log_channel_id} not found for voice state updates.")
+            print(f"Log channel with ID {log_channel} not found for voice state updates.")
             return
 
         embed = None
@@ -470,6 +539,13 @@ class MyClient(discord.Client):
             except discord.HTTPException as e:
                 print(f"Failed to send {log_type} log to Discord: {e}")
 
+# Public function
+def get_log_channel_json():
+    json_path = "discord-bot/log_channels.json"
+    with open(json_path, "r") as f:
+        log_data = json.load(f)
+        return log_data
+    
 # ==== End of bot's logic ====
 
 # ==== Start of Intents, permissions, and tokens ====
@@ -477,12 +553,10 @@ intents = discord.Intents.all()
 
 client = MyClient(intents=intents)
 load_dotenv()
-#token = os.getenv("BOT_TOKEN")
 # ==== End of Intents, permissions, and tokens ====
 
 # ==== Start of main logic ====
 
-# engine = create_engine("sqlite:///discord-bot/database/orm.db")
 SQLModel.metadata.create_all(engine)
 
 client.run(os.getenv("BOT_TOKEN"))
