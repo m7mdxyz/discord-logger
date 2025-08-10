@@ -179,9 +179,9 @@ o.OOOo.                                    o        o
     discord_thread = threading.Thread(target=run_discord_bot)
     flask_thread = threading.Thread(target=run_flask_app)
 
-    #discord_thread.start()
+    discord_thread.start()
     flask_thread.start()
 
-    #discord_thread.join()
+    discord_thread.join()
     flask_thread.join()
     

@@ -539,6 +539,109 @@ class MyClient(discord.Client):
             except discord.HTTPException as e:
                 print(f"Failed to send {log_type} log to Discord: {e}")
 
+    async def on_member_join(self, member: discord.Member):
+        """
+        Logs when a new member joins the guild.
+        """
+        #if member.bot:
+        #    return
+        
+        current_time_utc = datetime.utcnow()
+        
+        guild_activity_instance = GuildActivity(
+            action="Join",
+            member_id=member.id,
+            timestamp=current_time_utc
+        )
+        
+        with Session(engine) as session:
+            session.add(guild_activity_instance)
+            session.commit()
+            
+        # TODO: Send an embed
+
+    async def on_member_remove(self, member: discord.Member):
+        """
+        Logs when a member leaves or is kicked from the guild.
+        (Note: Doesn't differentiate between leave and kick directly, use audit logs for that)
+        """
+        #if member.bot:
+        #    return
+             
+        current_time_utc = datetime.utcnow()
+        
+        guild_activity_instance = GuildActivity(
+            action="leave/kick",
+            member_id=member.id,
+            timestamp=current_time_utc
+        )
+        
+        with Session(engine) as session:
+            session.add(guild_activity_instance)
+            session.commit()
+    
+        # TODO: Send an embed
+
+    async def on_member_update(self, before: discord.Member, after: discord.Member):
+        """
+        Logs when a member's roles are changed or when they are timed out.
+        TODO: More about member update (e.g. Changed name, changed profile, etc.)
+        """
+        #if after.bot:
+        #    return
+
+        current_time_utc = datetime.utcnow()
+
+        action = ""
+        if before.roles != after.roles:
+            role_id = None
+            added_roles = [role for role in after.roles if role not in before.roles]
+            removed_roles = [role for role in before.roles if role not in after.roles]
+            if added_roles:
+                action = "Role Added"
+                role_id = added_roles[0].id
+
+                # Update the member roles in Member table                
+                with Session(engine) as session:
+                    statement = select(Member).where(Member.id == after.id)
+                    member_to_update = session.exec(statement).one()
+                    current_roles = json.loads(member_to_update.roles_json or "[]")
+                    if role_id not in current_roles:
+                        current_roles.append(role_id)
+                    member_to_update.roles_json = json.dumps(current_roles)
+                    session.add(member_to_update)
+                    session.commit()
+                                    
+            elif removed_roles:
+                action = "Role Removed"
+                role_id = removed_roles[0].id
+                
+                # Update the member roles in Member table                
+                with Session(engine) as session:
+                    statement = select(Member).where(Member.id == after.id)
+                    member_to_update = session.exec(statement).one()
+                    current_roles = json.loads(member_to_update.roles_json or "[]")
+                    if role_id in current_roles:
+                        current_roles.remove(role_id)
+                    member_to_update.roles_json = json.dumps(current_roles)
+                    session.add(member_to_update)
+                    session.commit()
+
+            member_activity_instance = MemberActivity(
+                member_id=after.id,
+                action=action,
+                role_id=role_id,
+                timestamp=current_time_utc,
+            )
+            with Session(engine) as session:
+                session.add(member_activity_instance)
+                session.commit()
+                
+        # TODO: Timeout logging into database
+        
+        # TODO: Send an embed (use action to know what happened)
+
+
 # Public function
 def get_log_channel_json():
     json_path = "discord-bot/log_channels.json"

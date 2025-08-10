@@ -6,18 +6,24 @@ A bot that logs everything happening on your server
 
 ## About the Project
 
-This is a source code for a discord bot that monitor and logs everything happening on your server. It saves these logs into a relational database. You can access a nice dashboard to view these logs.
+This is the source code for a **Discord bot** that **monitors and logs all activity** on your server. It stores every event in a **relational database**, and you can access a **user-friendly dashboard** to review the logs.
 
 ## What it monitors
 
 - **Message**
-    - Store every message sent on the server
-    - Store every change of messages
-    - Store deleted messages
+    - Stores every message sent on the server
+    - Tracks message edits and deletions
+    - Saves deleted messages for audit purposes
 - **Voice States** 
-    - Who joined, left a voice chat and when.
-    - Who put mute/defean and when.
-- *more to come soon*
+    - Logs who joined/left a voice channel
+    - Tracks mute/unmute and deafen/undeafen events
+- **Guild Members**
+    - Logs every member who joined or left the guild
+    - Records bans, kicks, and unbans of members
+- **Role Changes**
+    - Logs every role given or removed from members
+- *More coming soon...*
+
 
 ## Database Architecture
 
