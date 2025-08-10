@@ -3,6 +3,8 @@ import subprocess
 import os
 from dotenv import load_dotenv
 import shutil
+import json
+from datetime import datetime
 
 RED = '\033[31m'
 GREEN = '\033[32m'
@@ -85,6 +87,35 @@ def check_env_exists():
         copy_env_file()
         exit()
 
+expected_structure = {
+    "log_category_id": None,
+    "deleted_messages_channel_id": None,
+    "edited_messages_channel_id": None,
+    "voice_activity_channel_id": None,
+    "guild_activity_channel_id": None,
+    "members_activity_channel_id": None
+}
+
+
+def is_valid_log_channels_json(data):
+    if isinstance(data, dict):
+        return all(key in data for key in expected_structure)
+    return False
+
+def create_log_channels_json():
+    try:
+        with open('./discord-bot/log_channels.json', 'w') as file:
+            json.dump(expected_structure, file, indent=4)
+    except:
+        print(f"{RED}wtf, file not exists")
+        exit()
+
+
+def backup_invalid_file(filepath):
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_file_path = f'{os.path.splitext(filepath)[0]}_backup_{timestamp}{os.path.splitext(filepath)[1]}'
+    shutil.copyfile(filepath, backup_file_path)
+    print(f"{BLUE}Copied invalid file to {backup_file_path}.{RESET}")
 
 if __name__ == "__main__":
         
@@ -116,15 +147,41 @@ o.OOOo.                                    o        o
     check_file_exists('./web-dashboard/app.py')
     check_file_exists('./discord-bot/main.py')
     
+    # Checking for log_channels.json
+    if os.path.exists('./discord-bot/log_channels.json'):
+        # If yes, make sure it's valid
+        with open('./discord-bot/log_channels.json', 'r') as file:
+            try:
+                # Load the JSON data
+                data = json.load(file)
+                # Validate the JSON structure
+                if not is_valid_log_channels_json(data):
+                    print(f"{RED}Invalid ./discord-bot/log_channels.json structure.{RESET}")
+                    backup_invalid_file('./discord-bot/log_channels.json')
+                    create_log_channels_json()
+                    print(f"{GREEN}Created a new ./discord-bot/log_channels.json.{RESET}")
+            except json.JSONDecodeError:
+                print(f"{RED}./discord-bot/log_channels.json is invalid.{RESET}")
+                backup_invalid_file('./discord-bot/log_channels.json')
+                create_log_channels_json()
+                print(f"{GREEN}Created a new ./discord-bot/log_channels.json.{RESET}")
+    else:
+        print(f"{RED}./discord-bot/log_channels.json does not exists, creating a default one...")
+        create_log_channels_json()
+        print(f"{GREEN}Created a new ./discord-bot/log_channels.json.{RESET}")
+    check_file_exists('./discord-bot/log_channels.json')        
+    
+
+    
     print("\nEverything looks good! Starting the app now...")
     print(f"You can access the web dashboard on http://127.0.0.1:{os.getenv("DASHBOARD_PORT")}\n\n")
     print("==== START OF APPLICATION LOGS ====")
     discord_thread = threading.Thread(target=run_discord_bot)
     flask_thread = threading.Thread(target=run_flask_app)
 
-    discord_thread.start()
+    #discord_thread.start()
     flask_thread.start()
 
-    discord_thread.join()
+    #discord_thread.join()
     flask_thread.join()
     
